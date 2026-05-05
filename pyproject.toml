@@ -18,6 +18,11 @@ dependencies = []
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "pylint",
+    "black",
+    "isort",
+    "mypy",
+    "ruff",
 ]
 
 [tool.setuptools.packages.find]
