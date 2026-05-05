@@ -2,8 +2,8 @@ import pytest
 from lattice_bounds.lattice import CliqueLattice
 
 def test_hypergraph_count():
-    n = 3
-    k = 2
+    n = 5
+    k = 3
     lattice = CliqueLattice(n, k)
     
     num_cliques = len(lattice.cliques)
