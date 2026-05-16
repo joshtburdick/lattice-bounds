@@ -105,7 +105,7 @@ class IpLayers:
             vars += [("L", l1)]
         # pdb.set_trace()
         # wrapper for LP solver
-        self.lp = pulp_helper.PuLP_Helper(vars)
+        self.lp = pulp_helper.PulpHelper(vars)
         # basis for gates
         self.basis = gate_basis.TwoInputNandBasis()
         # for debugging: directory in which to save LP problem files

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-# Utilities for counting hypergraphs in subsets of vertices.
+"""
+Utilities for counting hypergraphs in subsets of vertices.
+"""
 
 import math
 import pdb
