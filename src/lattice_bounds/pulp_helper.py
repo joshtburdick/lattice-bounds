@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
-"""Convenient interface (hopefully) for use with PuLP."""
+"""Convenient interface for use with PuLP."""
 
 import fractions
 import math
 import re
+
 import functools
 
 import pulp
 
+
 class PulpHelper:
     """Wrapper class for PuLP solver, providing convenient variable names."""
+
+    # ??? rename to PulpWrapper?
 
     def __init__(self, var_names):
         """Constructor.
@@ -20,6 +24,7 @@ class PulpHelper:
         # to PuLP variable object
         self.vars = {}
         # the variables are assumed to all be >= 0
+        # ??? are there better "box" bounds?
         for v in var_names:
             self.vars[v] = pulp.LpVariable(self.get_parseable_name(v), 0)
         # the problem
@@ -32,10 +37,10 @@ class PulpHelper:
         s = re.sub("[\\.,\\(\\)]", "_", s)
         return "x_" + s
 
-    def add_constraint(self, terms, op, b):
+    def add_constraint(self, a_list, op, b):
         """Adds one row to the problem.
 
-        terms: a list of (x, a) pairs, where:
+        a_list: a list of (x, a) pairs, where:
             a is the coefficient
             x is the variable, which is a key in self.vars
         (XXX arguably "(a, x)" would make sense, but I used "(x, a)"
@@ -47,13 +52,15 @@ class PulpHelper:
         """
         if op not in ["<=", "=", ">="]:
             raise ValueError(f"unknown operator: {op}")
-        # get least common multiple of denominators of terms and b
-        coefs = [fractions.Fraction(a) for (_, a) in terms]
+        # get least common multiple of denominators of A and b
+        coefs = [fractions.Fraction(a) for (_, a) in a_list]
         denominators = [fractions.Fraction(x).denominator for x in coefs + [b]]
         lcm = functools.reduce(math.lcm, denominators)
         # convert coefficients to format PuLP expects, multiplying
         # by LCM (so that, hopefully, all coefficients are integers)
-        a_as_expr = pulp.lpSum([(lcm * a) * self.vars[x] for (x, a) in terms if a != 0])
+        a_as_expr = pulp.lpSum(
+            [(lcm * a) * self.vars[x] for (x, a) in a_list if a != 0]
+        )
         # also multiply b by the LCM
         if op == "<=":
             self.prob += a_as_expr <= lcm * b
@@ -93,7 +100,7 @@ class PulpHelper:
         # problem had a solution
         print(f"Result r = {r}")
         if r == 1:
-            opt = {x: var.varValue for x, var in self.vars.items()}
+            opt = {x: val.varValue for x, val in self.vars.items()}
             return opt
         # problem was infeasible, or something else went wrong
         return None
@@ -122,7 +129,7 @@ class PulpHelper:
 
         # did problem have a solution?
         if r == 1:
-            opt = {x: var.varValue for x, var in self.vars.items()}
+            opt = {x: val.varValue for x, val in self.vars.items()}
             opt["__objective__"] = pulp.pulp.value(self.prob.objective)
             return opt
         # problem was infeasible, or something else went wrong

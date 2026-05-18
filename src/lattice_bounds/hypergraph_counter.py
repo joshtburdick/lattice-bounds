@@ -3,13 +3,10 @@
 Utilities for counting hypergraphs in subsets of vertices.
 """
 
-import math
-import pdb
+import itertools
 import sys
 
 import numpy as np
-import scipy.optimize
-import scipy.sparse
 import scipy.special
 
 
@@ -87,7 +84,7 @@ class HypergraphCounter:
 
         Returns: a dict h, with key v, an int in the range k..n,
             representing the number of vertices.
-            h[v] is a numpy array of length ${v \choose k}$.
+            h[v] is a numpy array of length ${v \\choose k}$.
             h[v][i] is the number of hypergraphs with up to
                 $v$ vertices, and exactly $i$ hyperedges.
         """
@@ -122,13 +119,8 @@ class HypergraphCounter:
         max_vertex_counts = self.count_hypergraphs_max_vertices()
         # initialize the count, for the empty graph
         exact_counts = {self.k - 1: np.array([1], dtype="object")}
-        # this will be the totals of all
-        smaller_totals = np.zeros(comb(self.n, self.k) + 1, dtype="object")
-        # initially, this is just the empty set
-        # smaller_totals[0] = 1
         # loop through number of vertices
         for i in range(self.k, self.n + 1):
-            # print(f'i = {i}')
             # start with (a copy of) the max. counts for this number of vertices
             b = np.array(max_vertex_counts[i])
             # subtract off total, for one fewer vertices
@@ -159,13 +151,14 @@ class SlowHypergraphCounter:
             raise ValueError("n choose k would use a lot of memory; exiting")
         self.n = n
         self.k = k
-        # numbering for the cliques
-        cliques = [frozenset(s) for s in itertools.combinations(range(n), k)]
-        self.clique_index = dict(zip(cliques, range(len(cliques))))
+        # The cliques
+        self.cliques = [frozenset(s) for s in itertools.combinations(range(n), k)]
+        self.num_functions = len(self.cliques)
+        self.clique_index = dict(zip(self.cliques, range(self.num_functions)))
         # the sets of cliques
-        self.S = np.arange(self.num_functions)
+        self.s = np.arange(self.num_functions)
         # the sets of cliques which are "zeroable", and don't overlap S
-        self.Z = np.zeros(self.num_functions, dtype="int")
+        self.z = np.zeros(self.num_functions, dtype="int")
 
     def count_zero_set(self, cliques_to_count):
         """Adds everywhere that some cliques could be zeroed.
@@ -176,9 +169,9 @@ class SlowHypergraphCounter:
             which aren't in this set (in S), but could be zeroed
         """
         # find sets where those cliques would be missed
-        i = (self.S & cliques_to_count) == 0
+        i = (self.s & cliques_to_count) == 0
         # add those to Z
-        self.Z[i] = self.Z[i] | cliques_to_count
+        self.z[i] = self.z[i] | cliques_to_count
 
     def zero_vertices(self):
         """Finds sets of cliques unaffected by zeroing out vertices.
@@ -199,12 +192,8 @@ class SlowHypergraphCounter:
             # zero out that set of cliques
             self.count_zero_set(mask)
 
-    def count_hypergraphs(self):
-        """Counts hypergraphs having some number of vertices."""
-        pass
 
-
-# XXX a quick test
+# A quick test
 if __name__ == "__main__":
     hc = HypergraphCounter(int(sys.argv[1]), int(sys.argv[2]))
     # this is a toy example, but is small enough to check by hand
@@ -217,21 +206,21 @@ if __name__ == "__main__":
     # hc = HypergraphCounter(30, 3)
 
     print("exact-number-of-vertex counts (in subgraphs):")
-    for v, h in hc.count_hypergraphs_exact_vertices_subgraph().items():
-        h = " ".join([str(x) for x in h])
-        print(f"{v}: {h}")
+    for vertices, counts in hc.count_hypergraphs_exact_vertices_subgraph().items():
+        counts_string = " ".join([str(x) for x in counts])
+        print(f"{vertices}: {counts_string}")
 
     print("up-to-some-number-of-vertex counts:")
-    for v, h in hc.count_hypergraphs_max_vertices().items():
-        h = " ".join([str(x) for x in h])
-        print(f"{v}: {h}")
+    for vertices, counts in hc.count_hypergraphs_max_vertices().items():
+        counts_string = " ".join([str(x) for x in counts])
+        print(f"{vertices}: {counts_string}")
 
     print("exact-number-of-vertex counts:")
-    exact_counts = hc.count_hypergraphs_exact_vertices()
-    for v, h in exact_counts.items():
-        h = " ".join([str(x) for x in h])
-        print(f"{v}: {h}")
+    exact_number_of_vertices_counts = hc.count_hypergraphs_exact_vertices()
+    for vertices, counts in exact_number_of_vertices_counts.items():
+        counts_string = " ".join([str(x) for x in counts])
+        print(f"{vertices}: {counts_string}")
 
     # check sum of these
-    total_hypergraphs = sum([s.sum() for s in exact_counts.values()])
+    total_hypergraphs = sum(s.sum() for s in exact_number_of_vertices_counts.values())
     print(f"total hypergraphs = {total_hypergraphs}")
