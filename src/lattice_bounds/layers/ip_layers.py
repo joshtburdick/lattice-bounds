@@ -15,17 +15,14 @@ import math
 import pdb
 import sys
 
-sys.path.append("..")  # XXX
-sys.path.append("../..")  # XXX
-
 import numpy as np
 import pandas
 import scipy.special
 import scipy.stats
 
-import gate_basis
-import hypergraph_counter
-import pulp_helper
+import lattice_bounds.gate_basis
+import lattice_bounds.hypergraph_counter
+import lattice_bounds.pulp_helper
 
 
 # Wrapper for comb(), with exact arithmetic.
