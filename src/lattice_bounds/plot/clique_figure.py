@@ -1,29 +1,26 @@
 #!/usr/bin/env python3
-# Plots graphs, after zeroing out some hypercliques.
+"""
+Plots graphs, after zeroing out some hypercliques.
+"""
+
 # FIXME
 # - clarify where arrows are pointing
 
 import colorsys
 import itertools
-import pdb
 import random
-import sys
 
-import matplotlib
 import matplotlib.pyplot as plt
-import matplotlib.ticker
 import numpy as np
-import scipy.interpolate
-import scipy.stats
 
 # set seed
 np.random.seed(12345)
 
 # for consistency, these are set for a bunch of figures
-n = 6
-cliques = [frozenset(s) for s in itertools.combinations(range(n), 3)]
+N = 6
+CLIQUES = [frozenset(s) for s in itertools.combinations(range(N), 3)]
 # sort these lexicographically
-cliques.sort()
+CLIQUES.sort()
 
 
 def random_hypergraph():
@@ -31,7 +28,7 @@ def random_hypergraph():
 
     Each hyperedge is included with probability 1/2.
     """
-    return [e for e in cliques if np.random.choice([True, False])]
+    return [e for e in CLIQUES if np.random.choice([True, False])]
 
 
 def color_with_hue(h):
@@ -129,7 +126,7 @@ def zero_out_edges(cliques):
         return frozenset([c for c in cliques if not frozenset(edge) < c])
 
     # note that this removes self-loops
-    return list(set([cliques_remaining(e) for e in edges]) - set([cliques]))
+    return list({cliques_remaining(e) for e in edges} - {cliques})
 
 
 def zero_vertex(v, s):
@@ -157,7 +154,7 @@ def num_vertices_zeroed(a, b):
     a = frozenset(a)
     b = frozenset(b)
     # first, make sure that a is a strict subset of b
-    if not (a < b):
+    if not a < b:
         return None
     # get all vertices in each
     a_vertices = all_vertices(a)
@@ -170,16 +167,10 @@ def num_vertices_zeroed(a, b):
     # b is zeroable to a iff this is the same as a
     if a == b1:
         return len(z)
-    else:
-        return None
+    return None
 
 
-# quick test
-if False:
-    z = has_zeroing_path(
-        [frozenset([1, 2, 3])], [frozenset([1, 2, 3]), frozenset([1, 2, 5])]
-    )
-    print(z)
+
 
 
 def plot_bounce():
@@ -190,8 +181,8 @@ def plot_bounce():
     zeroed_edge = (2, 3)
 
     # get sets which the edge hits, and misses
-    hit_sets = frozenset([c for c in cliques if frozenset(zeroed_edge) <= c])
-    missed_sets = frozenset(cliques) - hit_sets
+    hit_sets = frozenset([c for c in CLIQUES if frozenset(zeroed_edge) <= c])
+    missed_sets = frozenset(CLIQUES) - hit_sets
 
     # construct the sets: first the set after "zeroing"...
     b_t = frozenset(random.sample(sorted(missed_sets), 3))
@@ -210,13 +201,12 @@ def plot_bounce():
     # utility to set all cliques to one color
     # FIXME maybe simpler if each clique had its own alpha?
     def all_colors(c):
-        return {s: c for s in cliques}
+        return {s: c for s in CLIQUES}
 
-    cf = CliqueFigure(plt.gca(), n, all_colors(colorsys.hsv_to_rgb(0, 0, 0.25)), 0)
+    cf = CliqueFigure(plt.gca(), N, all_colors(colorsys.hsv_to_rgb(0, 0, 0.25)), 0)
     radius = 0.4
 
     # draw cliques
-    x1 = np.array([[0.75, 0], [0.25, 1]]).T
     x = np.array(
         [[-1.5, 0, 1.5], [len(a_t) + len(b_t), len(b_t), len(a_t_plus_1) + len(b_t)]]
     )
@@ -239,13 +229,12 @@ def plot_bounce():
             "",
             xy=x[:, j],
             xytext=x[:, i],
-            arrowprops=dict(
-                arrowstyle="->",
-                connectionstyle="angle3,angleA=-20,angleB=70",
-                # relpos=(0,0),
-                facecolor="#00000080",
-                edgecolor="#00000080",
-            ),
+            arrowprops={
+                "arrowstyle": "->",
+                "connectionstyle": "angle3,angleA=-20,angleB=70",
+                "facecolor": "#00000080",
+                "edgecolor": "#00000080",
+            },
         )
 
     draw_arrow(0, 1)
@@ -269,9 +258,9 @@ def plot_zeroing_one_vertex():
     """Plots the effect of zeroing out one vertex.
 
     That is plots G and Z(G)."""
-    g = random.sample(cliques, 8)
+    g = random.sample(CLIQUES, 8)
     zeroed_vertex = 2
-    zeroed_g = [c for c in g if zeroed_vertex not in c]
+    zeroed_g = [c for c in g if zeroed_vertex not in c]  # pylint: disable=unsupported-membership-test
 
     # set up figure
     plt.figure(figsize=(4, 4))
@@ -280,9 +269,9 @@ def plot_zeroing_one_vertex():
     plt.ylim(-0.3, 1.3)
     colors = {
         c: color_with_hue(2 / 3) if c in zeroed_g else colorsys.hsv_to_rgb(0, 0.5, 0.25)
-        for c in cliques
+        for c in CLIQUES
     }
-    cf = CliqueFigure(plt.gca(), n, colors, 0)
+    cf = CliqueFigure(plt.gca(), N, colors, 0)
     radius = 0.3
 
     # draw cliques
@@ -294,13 +283,12 @@ def plot_zeroing_one_vertex():
         "",
         xy=x[:, 0],
         xytext=x[:, 1],
-        arrowprops=dict(
-            arrowstyle="->",
-            connectionstyle="angle3,angleA=20,angleB=70",
-            # relpos=(0,0),
-            facecolor="#00000040",
-            edgecolor="#00000040",
-        ),
+        arrowprops={
+            "arrowstyle": "->",
+            "connectionstyle": "angle3,angleA=20,angleB=70",
+            "facecolor": "#00000040",
+            "edgecolor": "#00000040",
+        },
     )
 
     # label them
@@ -309,7 +297,7 @@ def plot_zeroing_one_vertex():
 
     # plot lines showing which edges were zeroed out
     v = cf.get_vertices(radius, x[:, 1])
-    for i in range(n):
+    for i in range(N):
         if i != zeroed_vertex:
             ends = v[:, [zeroed_vertex, i]]
             plt.plot(ends[0, :], ends[1, :], "-", c="red", alpha=0.5)
@@ -318,7 +306,7 @@ def plot_zeroing_one_vertex():
     plt.savefig("zeroing_one_vertex.pdf", bbox_inches="tight")
 
 
-def plot_Z_relation():
+def plot_z_relation():
     """Plots the 'zeroing-one-edge' relation."""
     plt.figure(figsize=(7, 6))
     plt.axis("off")
@@ -339,15 +327,15 @@ def plot_Z_relation():
     # lay out coordinates for each set; this will be keyed by set,
     # and its value will be coordinates
     set_location = {}
-    all_cliques = list([frozenset(s) for s in itertools.combinations(range(4), 3)])
+    all_cliques = list(frozenset(s) for s in itertools.combinations(range(4), 3))
     for j in range(0, 5):
         print(j)
         # ??? should this be a set rather than a tuple?
         subsets = tuple(itertools.combinations(all_cliques, j))
-        for i in range(len(subsets)):
-            print(((i, j), subsets[i]))
+        for i, subset in enumerate(subsets):
+            print(((i, j), subset))
             # this is mostly centered, but also slightly tilted
-            set_location[frozenset(subsets[i])] = (i - len(subsets) / 2 + j / 3, j)
+            set_location[frozenset(subset)] = (i - len(subsets) / 2 + j / 3, j)
     # plot effects of zeroing out an edge
     for cliques, location in set_location.items():
         cliques_below = zero_out_edges(cliques)
@@ -360,14 +348,14 @@ def plot_Z_relation():
                 "",
                 xy=location_1,  # [a['x'], a['y']],
                 xytext=location,  # [b['x'], b['y']],
-                arrowprops=dict(
-                    arrowstyle="->",
-                    connectionstyle="angle3,angleA=25,angleB=95",
-                    facecolor="black",
-                    edgecolor="black",
-                    alpha=0.25,
-                    linewidth=1,
-                ),
+                arrowprops={
+                    "arrowstyle": "->",
+                    "connectionstyle": "angle3,angleA=25,angleB=95",
+                    "facecolor": "black",
+                    "edgecolor": "black",
+                    "alpha": 0.25,
+                    "linewidth": 1,
+                },
             )
 
     # plot the sets
@@ -407,7 +395,7 @@ class ZeroingPlot:
         if frozenset(s) in [frozenset(s1["s"]) for s1 in self.set_list]:
             return
         # add to the list of sets
-        self.set_list.append(dict(s=s, x=x, y=y, label=label))
+        self.set_list.append({"s": s, "x": x, "y": y, "label": label})
 
     def add_chain(self, s, x, vertices):
         """Adds a set of cliques, from zeroing out several vertices.
@@ -429,14 +417,14 @@ class ZeroingPlot:
         # create object for plotting
         colors = dict(
             zip(
-                cliques,
+                CLIQUES,
                 [
                     color_with_hue(h)
-                    for h in np.linspace(0, 1, len(cliques), endpoint=False)
+                    for h in np.linspace(0, 1, len(CLIQUES), endpoint=False)
                 ],
             )
         )
-        cf = CliqueFigure(axs, n, colors, 0)
+        cf = CliqueFigure(axs, N, colors, 0)
         # plot the sets of cliques
         # XXX this sometimes almost has collisions, but it seems worth it
         radius = 0.45
@@ -469,14 +457,14 @@ class ZeroingPlot:
                             "",
                             xy=[a["x"], a["y"]],
                             xytext=[b["x"], b["y"]],
-                            arrowprops=dict(
-                                arrowstyle="->",
-                                connectionstyle="angle3,angleA=-30,angleB=70",
-                                facecolor="black",
-                                edgecolor="black",
-                                alpha=0.25,
-                                linewidth=1,
-                            ),
+                            arrowprops={
+                                "arrowstyle": "->",
+                                "connectionstyle": "angle3,angleA=-30,angleB=70",
+                                "facecolor": "black",
+                                "edgecolor": "black",
+                                "alpha": 0.25,
+                                "linewidth": 1,
+                            },
                         )
                         have_drawn_edge = True
                 # if we've drawn an edge, then don't try zeroing more vertices
@@ -484,28 +472,11 @@ class ZeroingPlot:
                     break
 
 
-class ZeroingBlockDiagram:
-    """Plots a 'block' diagram of the effect of zeroing.
-
-    Not yet implemented. Indeed, deprecated...
-    """
-
-    def __init__(self):
-        self.max_n = 6
-        self.k = 3
-
-
-def plot_Z_with_vertex_zeroing():
+def plot_z_with_vertex_zeroing():
     """Plots Z, with vertices zeroed out."""
     plt.figure(figsize=(8, 6))
 
-    # FIXME
-    def color1(h):
-        return colorsys.hsv_to_rgb(h, 0.5, 0.5)
-
-    fig, axs = plt.subplots()
-    # set colors for cliques, in order
-    colors = dict(zip(cliques, [color1(h) for h in np.arange(0, 1, 20)]))
+    _, axs = plt.subplots()
     # set up for plotting
     axs.set_xlim(-7, 7)
     axs.set_ylim(-1, 21)
@@ -518,7 +489,7 @@ def plot_Z_with_vertex_zeroing():
 
     # add sets of cliques...
     # first, add some labeled sets
-    zp.add_set(cliques, 0, label="(a) CLIQUE ")
+    zp.add_set(CLIQUES, 0, label="(a) CLIQUE ")
 
     def f(x, y, z):
         return frozenset([x, y, z])
@@ -527,7 +498,7 @@ def plot_Z_with_vertex_zeroing():
     s1 = [f(0, 1, 2), f(0, 1, 3), f(0, 1, 4), f(0, 1, 5)]
     zp.add_set(s1, 6, label="(c)")
     # add one path of zeroing out all the edges
-    zp.add_chain(cliques, 0, [5, 4, 3, 2, 1, 0])
+    zp.add_chain(CLIQUES, 0, [5, 4, 3, 2, 1, 0])
 
     # add some more random paths
     for x in [-2, 2, -4, 4, -6]:
@@ -546,4 +517,3 @@ def plot_Z_with_vertex_zeroing():
 
 def plot_covering():
     """Plots several coverings of vertices and edges."""
-    pass

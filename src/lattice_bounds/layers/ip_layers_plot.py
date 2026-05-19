@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
-# Plots the bounds.
+"""Plots averaging bounds."""
 
+import glob
 import os
 import pdb
 
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas
 import seaborn as sns
-from matplotlib.ticker import MaxNLocator
-
-output_dir = "bounds"
 
 
 def plot_bounds(bound_file, output_file):
@@ -22,7 +19,7 @@ def plot_bounds(bound_file, output_file):
         b["Num. levels"] = b["Num. levels"].astype("category")
 
     plt.figure(figsize=(6, 4.0))
-    g = sns.lineplot(
+    sns.lineplot(
         data=b, x="Num. cliques", y="Min. gates", hue="Num. levels", alpha=0.85, lw=1
     )
 
@@ -41,11 +38,10 @@ def plot_bounds(bound_file, output_file):
     plt.close()
 
 
-os.makedirs(output_dir, exist_ok=True)
-
-import glob
-
-for bound_file in glob.glob("bounds/*.csv"):
-    base_name = os.path.splitext(os.path.basename(bound_file))[0]
-    output_file = os.path.join(output_dir, f"{base_name}.pdf")
+if __name__ == "__main__":
+    output_dir = "bounds"
+    os.makedirs(output_dir, exist_ok=True)
+    for bound_file in glob.glob("bounds/*.csv"):
+        base_name = os.path.splitext(os.path.basename(bound_file))[0]
+        output_file = os.path.join(output_dir, f"{base_name}.pdf")
     plot_bounds(bound_file, output_file)
