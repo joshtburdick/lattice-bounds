@@ -3,7 +3,6 @@
 
 import glob
 import os
-import pdb
 
 import matplotlib.pyplot as plt
 import pandas
@@ -38,10 +37,15 @@ def plot_bounds(bound_file, output_file):
     plt.close()
 
 
-if __name__ == "__main__":
+def main():
+    """Main plotting entry point."""
     output_dir = "bounds"
     os.makedirs(output_dir, exist_ok=True)
     for bound_file in glob.glob("bounds/*.csv"):
         base_name = os.path.splitext(os.path.basename(bound_file))[0]
         output_file = os.path.join(output_dir, f"{base_name}.pdf")
-    plot_bounds(bound_file, output_file)
+        plot_bounds(bound_file, output_file)
+
+
+if __name__ == "__main__":
+    main()

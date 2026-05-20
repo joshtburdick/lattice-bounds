@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# LP bound for clique parity, with layers.
+"""LP bound for clique parity, with layers."""
 # FIXME
 # - The "zeroing" bound should use
 #   "sets with _up to_ some number of vertices";
@@ -9,10 +9,7 @@
 # - Allow switching basis?
 
 import argparse
-import fractions
 import itertools
-import math
-import pdb
 import sys
 
 import numpy as np
@@ -20,13 +17,13 @@ import pandas
 import scipy.special
 import scipy.stats
 
-import lattice_bounds.gate_basis
-import lattice_bounds.hypergraph_counter
-import lattice_bounds.pulp_helper
+from lattice_bounds import gate_basis
+from lattice_bounds import hypergraph_counter
+from lattice_bounds import pulp_helper
 
 
-# Wrapper for comb(), with exact arithmetic.
 def comb(n, k):
+    """Wrapper for comb(), with exact arithmetic."""
     return scipy.special.comb(n, k, exact=True)
 
 
@@ -48,9 +45,11 @@ def group_by_key(items, key_func):
 
 
 def flatten(nested_list):
+    """Flattens a nested list into a single list."""
     return list(itertools.chain.from_iterable(nested_list))
 
 
+# pylint: disable=too-many-instance-attributes
 class IpLayers:
     """Attempt at bound for "layers" of the clique problem."""
 
@@ -82,22 +81,22 @@ class IpLayers:
         self.counts_by_group = self.get_counts_by_group()
 
         # The variables for the LP.
-        vars = []
+        lp_vars = []
         # Loop trough the (num. vertices, layer) pairs.
         for v, layer in self.counts_by_group:
             # Expected number of gates, for each group.
-            vars += [("E", v, layer)]
+            lp_vars += [("E", v, layer)]
             # Counts of functions with some number of gates.
             for g in range(self.max_gates + 1):
-                vars += [(v, layer, g)]
+                lp_vars += [(v, layer, g)]
         # Averages, by number of vertices, and layer
         for v in range(self.k, self.n + 1):
-            vars += [("V", v)]
-        for l1, l2 in self.layers:
-            vars += [("L", l1)]
+            lp_vars += [("V", v)]
+        for l1, _ in self.layers:
+            lp_vars += [("L", l1)]
         # pdb.set_trace()
         # wrapper for LP solver
-        self.lp = pulp_helper.PulpHelper(vars)
+        self.lp = pulp_helper.PulpHelper(lp_vars)
         # basis for gates
         self.basis = gate_basis.TwoInputNandBasis()
         # for debugging: directory in which to save LP problem files
@@ -147,10 +146,10 @@ class IpLayers:
     def add_averaging_constraints(self):
         """Adds constraints on the average number of gates for each group."""
         for v, layer in self.counts_by_group:
-            A = [((v, layer, g), g) for g in range(self.max_gates + 1)]
+            coefs = [((v, layer, g), g) for g in range(self.max_gates + 1)]
             # "expected number of gates" = sum(counts * gates) / sum(counts)
             self.lp.add_constraint(
-                [(("E", v, layer), -self.counts_by_group[(v, layer)])] + A, "=", 0
+                [(("E", v, layer), -self.counts_by_group[(v, layer)])] + coefs, "=", 0
             )
             # add constraints on the number of functions in each group
             self.lp.add_constraint(
@@ -165,21 +164,21 @@ class IpLayers:
         counts_by_v = group_by_key(self.counts_by_group.items(), lambda x: x[0][0])
         for v, counts1 in counts_by_v.items():
             # pdb.set_trace()
-            A = [(("E", v, layer), w) for (v, layer), w in counts1]
-            total_w = sum([w for _, w in counts1])
-            self.lp.add_constraint([(("V", v), -total_w)] + A, "=", 0)
+            coefs = [(("E", v, layer), w) for (v, layer), w in counts1]
+            total_w = sum(w for _, w in counts1)
+            self.lp.add_constraint([(("V", v), -total_w)] + coefs, "=", 0)
         # marginalize over vertices, for each layer
         counts_by_layer = group_by_key(self.counts_by_group.items(), lambda x: x[0][1])
         for layer, counts1 in counts_by_layer.items():
-            A = [(("E", v, layer), w) for (v, layer), w in counts1]
-            total_w = sum([w for _, w in counts1])
-            self.lp.add_constraint([(("L", layer), -total_w)] + A, "=", 0)
+            coefs = [(("E", v, layer), w) for (v, layer), w in counts1]
+            total_w = sum(w for _, w in counts1)
+            self.lp.add_constraint([(("L", layer), -total_w)] + coefs, "=", 0)
 
     def add_counting_bounds(self):
         """Adds counting bounds, for a given number of gates."""
         # first, compute number of possible functions
         # for each number of gates
-        num_possible_functions = self.basis.num_functions(comb(self.n, 2), max_gates)
+        num_possible_functions = self.basis.num_functions(comb(self.n, 2), self.max_gates)
         for g in range(self.max_gates + 1):
             self.lp.add_constraint(
                 [((v, layer, g), 1) for v, layer in self.counts_by_group],
@@ -241,6 +240,7 @@ def get_bounds(n, k, max_gates, num_layers):
 
 
 def parse_args():
+    """Parses command-line arguments."""
     parser = argparse.ArgumentParser(
         description="Bounds circuit size for detecting subsets of cliques."
     )
@@ -252,7 +252,10 @@ def parse_args():
     parser.add_argument(
         "num_layers",
         type=str,
-        help="Number of layers, which can be a comma-separated list of integers (e.g. '10' or '10,12,14')",
+        help=(
+            "Number of layers, which can be a comma-separated list of "
+            "integers (e.g. '10' or '10,12,14')"
+        ),
     )
     parser.add_argument(
         "--dump-lp", help="Dump LP problem statement to a file", action="store_true"
@@ -268,7 +271,8 @@ def parse_args():
     return parser.parse_args()
 
 
-if __name__ == "__main__":
+def main():
+    """Main execution entry point."""
     args = parse_args()
     n = args.n
     k = args.k
@@ -281,7 +285,11 @@ if __name__ == "__main__":
     ]
     bounds = pandas.concat(bounds)
     if args.result_file:
-        with open(args.result_file, "wt") as f:
+        with open(args.result_file, "wt", encoding="utf-8") as f:
             bounds.to_csv(f, index=False)
     else:
         bounds.to_csv(sys.stdout, index=False)
+
+
+if __name__ == "__main__":
+    main()
