@@ -88,14 +88,13 @@ class UnboundedFanInNandBasis:
             f[i] is "number of functions using exactly i gates"
         """
         f = np.full(max_gates + 1, None)
-        # ??? this is the constant 1? or 0?
-        f[0] = 1
-        # note that this allows a gate with no inputs, which
-        # presumably outputs 1
-        for g in range(1, max_gates + 1):
-            f[g] = (2 ** (num_inputs + (g - 1))) * f[g - 1]
-        # on second thought, assuming no circuits have zero gates
+        # We assume that "nothing can be computed with zero gates".
         f[0] = 0
+        # Note that this allows a gate with no inputs. This "empty NAND"
+        # outputs the constant 0 (since the "empty AND" outputs the constant 1).
+        f[1] = 2**num_inputs
+        for g in range(2, max_gates + 1):
+            f[g] = (2 ** (num_inputs + g - 1)) * f[g - 1]
         return f
 
     def expected_num_gates(self, num_inputs, num_functions):
@@ -190,19 +189,21 @@ class TwoInputNandBasis:
         """Number of functions implementable with some number of gates.
 
         Again, this is an upper bound.
-        I think that this is essentially the counting described in
-            Aaronson, Scott. P != NP, pp. FIXME
+        This is almost the counting described in
+            Aaronson, Scott. P ?= NP, page 44,
+            but is slightly different.
+
         num_inputs: the number of inputs to the function
         max_gates: the maximum number of gates to include
         Returns: a numpy vector f with shape (max_gates+1,), such that
             f[i] is "number of functions using exactly i gates"
         """
         f = np.full(max_gates + 1, None)
-        # ??? how to define this?
+        # With zero gates, we can't implement anything.
         f[0] = 0
-        # ??? this is the constant 0?
+        # With one gate, we can implement the constant 0 function.
         f[1] = 1
-        for g in range(2, max_gates + 1):
+        for g in range(1, max_gates + 1):
             # each additional gate can use:
             # - an input
             # - a previous gate
@@ -210,7 +211,6 @@ class TwoInputNandBasis:
             f[g] = (
                 scipy.special.comb(num_inputs + (g - 1) + 1, 2, exact=True) * f[g - 1]
             )
-        # FIXME double-check this
         return f
 
     def expected_num_gates(self, num_inputs, num_functions):
