@@ -199,10 +199,8 @@ class TwoInputNandBasis:
             f[i] is "number of functions using exactly i gates"
         """
         f = np.full(max_gates + 1, None)
-        # With zero gates, we can't implement anything.
-        f[0] = 0
-        # With one gate, we can implement the constant 0 function.
-        f[1] = 1
+        # With zero gates, we assume we can implement the constant 0.
+        f[0] = 1
         for g in range(1, max_gates + 1):
             # each additional gate can use:
             # - an input
