@@ -42,14 +42,16 @@ class PickyBound:
         This will have the following variables:
         - ("G", picky, v, n_gates): the number of functions with exactly `n_gates` gates,
             in sets of cliques that have _exactly_ `v` vertices.
+        - ("X", picky, v, n_cliques): expected number of gates to detect sets containing
+            `n_cliques` cliques (and _exactly_ `v` vertices).
         - ("V", picky, v): expected number of gates to detect sets of cliques with
             _exactly_ `v` vertices.
         - ("U", picky, v): expected number gates to detect sets of cliques with
             _up to_ `v` vertices (and including BUGGYCLIQUE functions in PICKYCLIQUE).
-        - ("X", picky, n_cliques): expected number of gates to detect sets containing
-            `n_cliques` cliques (and any number of vertices).
+        - ("C", picky, n_cliques): expected number of gates to detect sets containing
+            `n_cliques` cliques.
         ???
-        - should we include the empty set of cliques?
+        - should we include the empty set of cliques? if so, how?
         """
         self.n = n
         self.k = k
@@ -90,9 +92,12 @@ class PickyBound:
                 # counts for each number of gates
                 for g in range(self.max_gates + 1):
                     lp_vars += [("G", picky, v, g)]
+                # averages by number of vertices, and cliques
+                for i in range(comb(self.v, v) + 1):
+                    lp_vars += [("X", picky, v, i)]
         # Averages, by number of vertices, and layer
         for n_cliques in range(self.num_possible_cliques + 1):
-            lp_vars += [("X", 0, n_cliques), ("X", 1, n_cliques)]
+            lp_vars += [("C", 0, n_cliques), ("C", 1, n_cliques)]
         # wrapper for LP solver
         self.lp = pulp_helper.PulpHelper(lp_vars)
         # basis for gates
@@ -115,19 +120,107 @@ class PickyBound:
                     "=",
                     self.function_counts[picky][v],
                 )
-            # add constraints connecting "V" and "U"
 
-            # add constraints connecting "X" and "V"
+    def add_cumulative_constraints(self):
+        """Add constraints connecting `V` and `U`.
+
+        These reflect that `V` is "exactly some number of vertices",
+        while `U` is "up to this number of vertices" (inclusive).
+        """
+        # First, we need the counts of functions (ignoring number of cliques),
+        # for each number of vertices.
+        counts_by_v = {}
+        for picky in [0, 1]:
+            counts_by_v[picky] = {}
+            for v in range(self.k, self.n + 1):
+                counts_by_v[picky][v] = sum(self.function_counts[picky][v])
+        # For BUGGYCLIQUE, constrain that `U` is an average of the
+        # previous `V` values (weighted by the counts for each number of vertices).
+        for v in range(self.k, self.n + 1):
+            A = [
+                (("V", 0, v_prime), counts_by_v[0][v_prime])
+                for v_prime in range(self.k, v + 1)
+            ]
+            total_counts = sum([a1[1] for a1 in A])
+            self.lp.add_constraint(
+                [(("U", 0, v), -total_counts)] + A,
+                "=",
+                0,
+            )
+        # PICKYCLIQUE is similar, but also includes BUGGYCLIQUE functions.
+        for v in range(self.k, self.n + 1):
+            A = []
+            for picky in [0, 1]:
+                for v_prime in range(self.k, v + 1):
+                    A += [("V", picky, v_prime), counts_by_v[picky][v_prime]]
+            total_counts = sum([a1[1] for a1 in A])
+            self.lp.add_constraint(
+                [("U", 1, v)] + A,
+                "=",
+                0,
+            )
+
+    def add_marginal_constraints(self):
+        """Add constraints for marginals of `X`, with respect to number of vertices
+        and number of cliques."""
+        # Marginals by number of cliques.
+        for picky in [0, 1]:
+            for n_cliques in range(self.num_possible_cliques + 1):
+                # Find range of number of vertices which have sets with <= n_cliques cliques.
+                A = [
+                    (
+                        ("X", picky, v_prime, n_cliques),
+                        self.function_counts[picky][v_prime][n_cliques],
+                    )
+                    for v_prime in range(self.k, self.n + 1)
+                    if n_cliques < self.function_counts[picky][v_prime].shape[0]
+                ]
+                total_counts = sum([a1[1] for a1 in A])
+                self.lp.add_constraint(
+                    [(("C", picky, n_cliques), -total_counts)] + A, "=", 0
+                )
+        # Marginals by number of vertices.
+        for picky in [0, 1]:
+            for v in range(self.k, self.n + 1):
+                A = [
+                    (
+                        ("X", picky, v, n_cliques),
+                        self.function_counts[picky][v][n_cliques],
+                    )
+                    for n_cliques in range(self.num_possible_cliques + 1)
+                ]
+                total_counts = sum([a1[1] for a1 in A])
+                self.lp.add_constraint([(("V", picky, v), -total_counts)] + A, "=", 0)
 
     def add_picky_bound(self):
-        """This connects the bounds for BUGGYCLIQUE and PICKYCLIQUE."""
+        """This connects the bounds for BUGGYCLIQUE and PICKYCLIQUE.
+
+        We could implement PICKYCLIQUE in terms of BUGGYCLIQUE in various ways:
+        - Given a set A with m cliques, we can pick all proper subsets B of A,
+          and implement PICKYCLIQUE(A, B) as BUGGYCLIQUE(A) AND NOT BUGGYCLIQUE(B).
+          (That's what's implemented here).
+        - Given a set A with m cliques, we can break it into two non-empty non-overlapping
+          sets B and C, and then implement
+          PICKYCLIQUE(A, B) as BUGGYCLIQUE(C) AND NOT BUGGYCLIQUE(B).
+          (Gemini thinks the latter is better; I'm not sure yet.)
+        For both of these, we can also implement BUGGYCLIQUE in terms of PICKYCLIQUE.
+        """
         for i in range(1, self.num_possible_cliques + 1):
-            pass
+            A = [(("C", 0, j), -comb(i, j)) for j in range(1, i)]
+            total_counts = sum([a1[1] for a1 in A])
+            # implementing PICKYCLIQUE in terms of two BUGGYCLIQUE functions
+            self.lp.add_constraint(
+                A + [(("C", 1, i), total_counts), (("C", 0, i), -total_counts)], "<=", 3
+            )
+            # ... and the other way around
+            self.lp.add_constraint(
+                A + [(("C", 0, i), total_counts), (("C", 1, i), -total_counts)], "<=", 3
+            )
 
     def add_counting_bounds(self):
         """Adds counting bounds, for a given number of gates."""
-        # first, compute number of possible functions
-        # for each number of gates
+        # First, compute number of possible functions
+        # for each number of gates.
         num_possible_functions = self.basis.num_functions(
             comb(self.n, 2), self.max_gates
         )
@@ -168,9 +261,12 @@ class PickyBound:
         """Adds upper bound.
 
         This assumes that we're using the unbounded-fan-in NAND gate basis.
+        Questions:
+        - Should this use `X` rather than `C`?
+        - Should PICKYCLIQUE also have an explict upper bound?
         """
         for n_cliques in range(1, self.num_possible_cliques + 1):
-            self.lp.add_constraint([(("X", n_cliques), 1)], "<=", n_cliques + 1)
+            self.lp.add_constraint([(("C", n_cliques), 1)], "<=", n_cliques + 1)
 
     def get_all_bounds(self):
         """Gets bounds for each possible number of cliques.
