@@ -154,7 +154,7 @@ class PickyBound:
                     coefs.append((("V", picky, v_prime), counts_by_v[picky][v_prime]))
             total_counts = sum([a1[1] for a1 in coefs])
             self.lp.add_constraint(
-                [("U", 1, v)] + coefs,
+                [(("U", 1, v), -total_counts)] + coefs,
                 "=",
                 0,
             )
@@ -181,12 +181,10 @@ class PickyBound:
         # Marginals by number of vertices.
         for picky in [0, 1]:
             for v in range(self.k, self.n + 1):
+                counts = self.function_counts[picky][v]
                 coefs = [
-                    (
-                        ("X", picky, v, n_cliques),
-                        self.function_counts[picky][v][n_cliques],
-                    )
-                    for n_cliques in range(self.num_possible_cliques + 1)
+                    (("X", picky, v, n_cliques), counts[n_cliques])
+                    for n_cliques in range(len(counts))
                 ]
                 total_counts = sum([a1[1] for a1 in coefs])
                 self.lp.add_constraint(
@@ -355,8 +353,8 @@ def main():
             use_zeroing,
             use_upper,
         )
-        for use_zeroing in [True, False]
-        for use_upper in [True, False]
+        for use_zeroing in [False, True]
+        for use_upper in [False, True]
     ]
 
     bounds = pandas.concat(bounds)
