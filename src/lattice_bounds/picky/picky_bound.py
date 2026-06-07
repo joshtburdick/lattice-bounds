@@ -50,8 +50,6 @@ class PickyBound:
             _up to_ `v` vertices (and including BUGGYCLIQUE functions in PICKYCLIQUE).
         - ("C", picky, n_cliques): expected number of gates to detect sets containing
             `n_cliques` cliques.
-        ???
-        - should we include the empty set of cliques? if so, how?
         """
         self.n = n
         self.k = k
@@ -85,21 +83,21 @@ class PickyBound:
         self.function_counts = [buggy_counts, picky_counts]
 
         # The variables for the LP.
-        lp_vars = []
+        self.variables = []
         for picky in [0, 1]:
             for v in range(self.k, self.n + 1):
-                lp_vars += [("V", picky, v), ("U", picky, v)]
+                self.variables += [("V", picky, v), ("U", picky, v)]
                 # counts for each number of gates
                 for g in range(self.max_gates + 1):
-                    lp_vars += [("G", picky, v, g)]
+                    self.variables += [("G", picky, v, g)]
                 # averages by number of vertices, and cliques
-                for i in range(comb(self.v, v) + 1):
-                    lp_vars += [("X", picky, v, i)]
+                for i in range(comb(v, self.k) + 1):
+                    self.variables += [("X", picky, v, i)]
         # Averages, by number of vertices, and layer
         for n_cliques in range(self.num_possible_cliques + 1):
-            lp_vars += [("C", 0, n_cliques), ("C", 1, n_cliques)]
+            self.variables += [("C", 0, n_cliques), ("C", 1, n_cliques)]
         # wrapper for LP solver
-        self.lp = pulp_helper.PulpHelper(lp_vars)
+        self.lp = pulp_helper.PulpHelper(self.variables)
         # basis for gates
         self.basis = gate_basis.UnboundedFanInNandBasis()
 
@@ -107,18 +105,19 @@ class PickyBound:
         """Adds constraints on the average number of gates for each group."""
         for picky in [0, 1]:
             for v in range(self.k, self.n + 1):
-                coefs = [((v, layer, g), g) for g in range(self.max_gates + 1)]
+                n_functions = sum(self.function_counts[picky][v])
+                coefs = [(("G", picky, v, g), g) for g in range(self.max_gates + 1)]
                 # "expected number of gates" = sum(counts * gates) / sum(counts)
                 self.lp.add_constraint(
-                    [(("V", picky, v), -self.function_counts[picky][v])],
+                    [(("V", picky, v), -n_functions)] + coefs,
                     "=",
                     0,
                 )
-                # add constraints on the number of functions in each group
+                # Constrain the number of functions in this group
                 self.lp.add_constraint(
                     [(("G", picky, v, g), 1) for g in range(self.max_gates + 1)],
                     "=",
-                    self.function_counts[picky][v],
+                    n_functions,
                 )
 
     def add_cumulative_constraints(self):
@@ -137,25 +136,25 @@ class PickyBound:
         # For BUGGYCLIQUE, constrain that `U` is an average of the
         # previous `V` values (weighted by the counts for each number of vertices).
         for v in range(self.k, self.n + 1):
-            A = [
+            coefs = [
                 (("V", 0, v_prime), counts_by_v[0][v_prime])
                 for v_prime in range(self.k, v + 1)
             ]
-            total_counts = sum([a1[1] for a1 in A])
+            total_counts = sum([a1[1] for a1 in coefs])
             self.lp.add_constraint(
-                [(("U", 0, v), -total_counts)] + A,
+                [(("U", 0, v), -total_counts)] + coefs,
                 "=",
                 0,
             )
         # PICKYCLIQUE is similar, but also includes BUGGYCLIQUE functions.
         for v in range(self.k, self.n + 1):
-            A = []
+            coefs = []
             for picky in [0, 1]:
                 for v_prime in range(self.k, v + 1):
-                    A += [("V", picky, v_prime), counts_by_v[picky][v_prime]]
-            total_counts = sum([a1[1] for a1 in A])
+                    coefs.append((("V", picky, v_prime), counts_by_v[picky][v_prime]))
+            total_counts = sum([a1[1] for a1 in coefs])
             self.lp.add_constraint(
-                [("U", 1, v)] + A,
+                [("U", 1, v)] + coefs,
                 "=",
                 0,
             )
@@ -167,7 +166,7 @@ class PickyBound:
         for picky in [0, 1]:
             for n_cliques in range(self.num_possible_cliques + 1):
                 # Find range of number of vertices which have sets with <= n_cliques cliques.
-                A = [
+                coefs = [
                     (
                         ("X", picky, v_prime, n_cliques),
                         self.function_counts[picky][v_prime][n_cliques],
@@ -175,22 +174,24 @@ class PickyBound:
                     for v_prime in range(self.k, self.n + 1)
                     if n_cliques < self.function_counts[picky][v_prime].shape[0]
                 ]
-                total_counts = sum([a1[1] for a1 in A])
+                total_counts = sum([a1[1] for a1 in coefs])
                 self.lp.add_constraint(
-                    [(("C", picky, n_cliques), -total_counts)] + A, "=", 0
+                    [(("C", picky, n_cliques), -total_counts)] + coefs, "=", 0
                 )
         # Marginals by number of vertices.
         for picky in [0, 1]:
             for v in range(self.k, self.n + 1):
-                A = [
+                coefs = [
                     (
                         ("X", picky, v, n_cliques),
                         self.function_counts[picky][v][n_cliques],
                     )
                     for n_cliques in range(self.num_possible_cliques + 1)
                 ]
-                total_counts = sum([a1[1] for a1 in A])
-                self.lp.add_constraint([(("V", picky, v), -total_counts)] + A, "=", 0)
+                total_counts = sum([a1[1] for a1 in coefs])
+                self.lp.add_constraint(
+                    [(("V", picky, v), -total_counts)] + coefs, "=", 0
+                )
 
     def add_picky_bound(self):
         """This connects the bounds for BUGGYCLIQUE and PICKYCLIQUE.
@@ -203,18 +204,22 @@ class PickyBound:
           sets B and C, and then implement
           PICKYCLIQUE(A, B) as BUGGYCLIQUE(C) AND NOT BUGGYCLIQUE(B).
           (Gemini thinks the latter is better; I'm not sure yet.)
-        For both of these, we can also implement BUGGYCLIQUE in terms of PICKYCLIQUE.
+        (For both of these, we can also implement BUGGYCLIQUE in terms of PICKYCLIQUE.)
         """
         for i in range(1, self.num_possible_cliques + 1):
-            A = [(("C", 0, j), -comb(i, j)) for j in range(1, i)]
-            total_counts = sum([a1[1] for a1 in A])
+            coefs = [(("C", 0, j), -comb(i, j)) for j in range(1, i)]
+            total_counts = sum([a1[1] for a1 in coefs])
             # implementing PICKYCLIQUE in terms of two BUGGYCLIQUE functions
             self.lp.add_constraint(
-                A + [(("C", 1, i), total_counts), (("C", 0, i), -total_counts)], "<=", 3
+                coefs + [(("C", 1, i), total_counts), (("C", 0, i), -total_counts)],
+                "<=",
+                3,
             )
             # ... and the other way around
             self.lp.add_constraint(
-                A + [(("C", 0, i), total_counts), (("C", 1, i), -total_counts)], "<=", 3
+                coefs + [(("C", 0, i), total_counts), (("C", 1, i), -total_counts)],
+                "<=",
+                3,
             )
 
     def add_counting_bounds(self):
@@ -226,12 +231,12 @@ class PickyBound:
         )
         # Get the "V" variables, which represent sets of cliques
         # with exactly `v` vertices.
-        vars = [x for x in self.lp.variables if x[0] == "V"]
+        v_vars = [x for x in self.variables if x[0] == "V"]
         # For each number of gates, bound the number of functions with
         # that many gates.
         for g in range(self.max_gates + 1):
             self.lp.add_constraint(
-                [(("G", picky, v, g), 1) for (_, picky, v) in vars],
+                [(("G", picky, v, g), 1) for (_, picky, v) in v_vars],
                 "<=",
                 num_possible_functions[g],
             )
@@ -244,14 +249,16 @@ class PickyBound:
         and so we're not guaranteed to hit a clique.
 
         Therefore, for simplicity, we use a bound of 0.5 "gates hit".
-        This seems conservative, as the actual number of cliques (and thus gates)
-        is just below 1.
+        This seems conservative, as we seem pretty likely to "hit" at least one clique.
 
         FIXME:
         - check that 0.5 is a valid bound
         - can we get a tighter bound than 0.5?
         """
-        for v in range(self.k + 1, self.n):
+        # As a "base case", we hard-wire the bound for BUGGYCLIQUE when k=n
+        # (for the unbounded-fan-in NAND gate basis, this is 2.
+        self.lp.add_constraint([(("U", 0, self.k), 1)], "<=", 2)
+        for v in range(self.k, self.n):
             # the bound for BUGGYCLIQUE
             self.lp.add_constraint([(("U", 0, v + 1), 1), (("U", 0, v), -1)], ">=", 0.5)
             # the bound for PICKYCLIQUE will have slightly more slack
@@ -261,12 +268,18 @@ class PickyBound:
         """Adds upper bound.
 
         This assumes that we're using the unbounded-fan-in NAND gate basis.
-        Questions:
-        - Should this use `X` rather than `C`?
-        - Should PICKYCLIQUE also have an explict upper bound?
         """
-        for n_cliques in range(1, self.num_possible_cliques + 1):
-            self.lp.add_constraint([(("C", n_cliques), 1)], "<=", n_cliques + 1)
+        for v in range(self.k, self.n + 1):
+            for n_cliques in range(1, comb(v, self.k) + 1):
+                # for BUGGYCLIQUE, bound is <= number of cliques + 1
+                self.lp.add_constraint(
+                    [(("X", 0, v, n_cliques), 1)], "<=", n_cliques + 1
+                )
+                # for PICKYCLIQUE, bound is <= number of cliques + 4, for the "AND NOT"
+                # FIXME: double-check if this is correct, or can be improved
+                self.lp.add_constraint(
+                    [(("X", 1, v, n_cliques), 1)], "<=", n_cliques + 4
+                )
 
     def get_all_bounds(self):
         """Gets bounds for each possible number of cliques.
@@ -275,15 +288,15 @@ class PickyBound:
         in the scenario that the number of gates for
         CLIQUE is minimized.
         """
-        # solve, minimizing number of gates in "highest layer"
-        r = self.lp.solve(("X", 0, self.num_possible_cliques))
+        # solve, minimizing number of gates in finding all the cliques
+        r = self.lp.solve(("C", 0, self.num_possible_cliques))
         if not r:
             return None
         # Get bounds for "expected number of gates" for functions in
         # each layer. To simplify plotting, we include the two endpoints
         # of each layer.
         n_cliques = np.arange(self.num_possible_cliques + 1)
-        bounds = np.array([r[("X", 0, nc)] for nc in n_cliques])
+        bounds = np.array([r[("C", 0, nc)] for nc in n_cliques])
         return pandas.DataFrame(
             {
                 "Num. cliques": n_cliques,
@@ -305,13 +318,16 @@ def get_bounds(n, k, label, use_zeroing, use_upper):
     sys.stderr.write(f"[bounding with n={n}, k={k}]\n")
     bound = PickyBound(n, k)
     bound.add_averaging_constraints()
+    bound.add_cumulative_constraints()
     bound.add_marginal_constraints()
     bound.add_picky_bound()
+    bound.add_counting_bounds()
     if use_zeroing:
         bound.add_zeroing_bound()
     if use_upper:
         bound.add_upper_bound()
     b = bound.get_all_bounds()
+    b["label"] = label
     return b
 
 
