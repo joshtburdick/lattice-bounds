@@ -303,7 +303,7 @@ class PickyBound:
         )
 
 
-def get_bounds(n, k, label, use_zeroing, use_upper):
+def get_bounds(n, k, label, use_zeroing, use_upper, max_gates=None):
     """Gets bounds with some set of constraints.
 
     Args:
@@ -311,10 +311,11 @@ def get_bounds(n, k, label, use_zeroing, use_upper):
         label: name to use for this configuration
         use_zeroing: whether to use zeroing bound
         use_upper: whether to use upper bound
+        max_gates: maximum number of gates
     """
     # ??? track resource usage?
-    sys.stderr.write(f"[bounding with n={n}, k={k}]\n")
-    bound = PickyBound(n, k)
+    sys.stderr.write(f"[bounding with n={n}, k={k}, max_gates={max_gates}]\n")
+    bound = PickyBound(n, k, max_gates=max_gates)
     bound.add_averaging_constraints()
     bound.add_cumulative_constraints()
     bound.add_marginal_constraints()
@@ -337,6 +338,9 @@ def parse_args():
     parser.add_argument("n", type=int, help="Number of vertices")
     parser.add_argument("k", type=int, help="Size of cliques")
     parser.add_argument(
+        "--max-gates", type=int, default=10, help="Maximum number of gates"
+    )
+    parser.add_argument(
         "--result-file", help="Write result to indicated file (rather than stdout)"
     )
     return parser.parse_args()
@@ -352,6 +356,7 @@ def main():
             f"use_zeroing={use_zeroing}, use_upper={use_upper}",
             use_zeroing,
             use_upper,
+            max_gates=args.max_gates,
         )
         for use_zeroing in [False, True]
         for use_upper in [False, True]
