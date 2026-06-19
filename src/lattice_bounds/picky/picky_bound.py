@@ -315,17 +315,17 @@ def get_bounds(n, k, label, use_zeroing, use_upper, max_gates=None):
     """
     # ??? track resource usage?
     sys.stderr.write(f"[bounding with n={n}, k={k}, max_gates={max_gates}]\n")
-    bound = PickyBound(n, k, max_gates=max_gates)
-    bound.add_averaging_constraints()
-    bound.add_cumulative_constraints()
-    bound.add_marginal_constraints()
-    bound.add_picky_bound()
-    bound.add_counting_bounds()
+    b = PickyBound(n, k, max_gates=max_gates)
+    b.add_averaging_constraints()
+    b.add_cumulative_constraints()
+    b.add_marginal_constraints()
+    b.add_picky_bound()
+    b.add_counting_bounds()
     if use_zeroing:
-        bound.add_zeroing_bound()
+        b.add_zeroing_bound()
     if use_upper:
-        bound.add_upper_bound()
-    b = bound.get_all_bounds()
+        b.add_upper_bound()
+    b = b.get_all_bounds()
     b["label"] = label
     return b
 
