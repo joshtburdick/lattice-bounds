@@ -144,6 +144,9 @@ class ParityBound:
                 "<=",
                 num_possible_functions[g],
             )
+        # also adding bound on 0 cliques
+        for v in range(self.k, self.n + 1):
+            self.lp.add_constraint([(("U", v, 0), 1)], "=", 1)
 
     def add_zeroing_bound(self):
         """Adds bound from zeroing out one vertex."""
@@ -198,26 +201,36 @@ class ParityBound:
                 # If we "hit" a clique, we "zonk" at least one NAND gate.
                 self.lp.add_constraint(A, ">=", p_at_least_one_hit)
 
-    def add_gap_bound(self):
+    def add_gap_bound(self, layer_size):
         """Adds bound based on the 'gap' between large and small sets of cliques.
 
-        FIXME: try adding the average of the top L and bottom L layers?
+        layer_size: number of high and low layers to average
+            (1 = just none, or all, of the cliques)
         """
         N = self.num_possible_cliques
-        for i in range(1, N // 2):
-            # We have:
-            # C_{n-i} <= C_n + C_i + 1 XOR
-            # C_n >= C_{n-i} - C_i - 1 XOR
-            # C_n - C_{n-i} + C_i >= -1 XOR
-            self.lp.add_constraint(
-                [
-                    (("U", self.n, N), 1),
-                    (("U", self.n, N - i), -1),
-                    (("U", self.n, i), 1),
-                ],
-                ">=",
-                -self.basis.xor_upper_bound(),
-            )
+        # Get weights for high and low layers.
+        n_functions_in_layer = {
+            n_cliques: comb(N, n_cliques) for n_cliques in range(layer_size)
+        }
+        total_functions_in_layers = sum(n_functions_in_layer.values())
+        high_coefs = [
+            (("U", self.n, N - nc), (-weight / total_functions_in_layers))
+            for nc, weight in n_functions_in_layer.items()
+        ]
+        low_coefs = [
+            (("U", self.n, nc), (weight / total_functions_in_layers))
+            for nc, weight in n_functions_in_layer.items()
+        ]
+
+        # We have:
+        # C_N <= C_high + C_low + 1 XOR
+        # C_N >= C_high - C_low - 1 XOR
+        # C_N - C_high + C_low >= -1 XOR
+        self.lp.add_constraint(
+            [(("U", self.n, N), 1)] + high_coefs + low_coefs,
+            ">=",
+            -self.basis.xor_upper_bound(),
+        )
 
     def add_upper_bound(self):
         """Adds upper bound, relative to the 'grand mean'."""
@@ -261,7 +274,9 @@ def get_bounds(n, k, use_zeroing, use_upper, max_gates=None):
     bound.add_averaging_constraints()
     bound.add_cumulative_constraints()
     bound.add_counting_bounds()
-    bound.add_gap_bound()
+    # We add this bound for many different layer sizes.
+    for layer_size in range(1, bound.num_possible_cliques // 2):
+        bound.add_gap_bound(layer_size)
     if use_zeroing:
         bound.add_zeroing_bound()
     if use_upper:
