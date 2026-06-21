@@ -195,7 +195,7 @@ class ParityBound:
                 # before and after zeroing out a vertex.
                 A = [(("U", v, n_cliques_before), 1)]
                 A += [
-                    (("U", v - 1, n_cliques_after[j]), -p_hit(j))
+                    (("U", v - 1, n_cliques_after[j]), -p_hit(n_cliques_hit[j]))
                     for j in range(len(n_cliques_after))
                 ]
                 # If we "hit" a clique, we "zonk" at least one NAND gate.
