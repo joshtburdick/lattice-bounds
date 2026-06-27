@@ -13,14 +13,16 @@ import math
 from lattice_bounds import pulp_helper
 
 
-def test_basic_LP():
-    """ """
+def test_lp_with_large_coefficients():
+    """Tests that the LP solver can handle large integer coefficients."""
     # Define a simple LP
     lp = pulp_helper.PulpHelper(["x1", "x2"])
     lp.add_constraint([("x1", 2), ("x2", 1)], ">=", 1)
     # FIXME(jtb): currently, PuLP's default GLPK solver doesn't handle
-    # large integer coefficients well. Once that's
-    # fixed, this should use a larger coefficient
+    # super-large integer coefficients well. (Admittedly, it can deal
+    # with 255-digit integers, but that doesn't seem sufficient.)
+    # Once that's fixed, this should use a larger coefficient
+    # (e.g., 10**10000).
     lp.add_constraint([("x1", 2), ("x2", 1)], ">=", 1)
     lp.add_constraint([("x1", 1), ("x2", 10**100)], ">=", 1)
 
