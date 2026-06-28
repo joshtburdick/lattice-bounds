@@ -35,7 +35,7 @@ def flatten(nested_list):
 
 # pylint: disable=too-many-instance-attributes
 class ParityBound:
-    """Attempt at bound for highest "layers" of BUGGYCLIQUE."""
+    """Attempt at bound for CLIQUE-PARITY."""
 
     def __init__(self, n, k, max_gates=None):
         """Constructor gets graph info, and sets up variable names.
@@ -46,12 +46,14 @@ class ParityBound:
             the LP will be infeasible)
 
         This will have the following variables:
-        - ("G", v, n_cliques, n_gates): the number of functions with exactly `n_gates` gates,
-            in sets of cliques that have _exactly_ `v` vertices and _exactly_ `n_cliques` cliques.
-        - ("V", v, n_cliques): expected number of gates to detect sets of cliques with
-            exactly `v` vertices and exactly `n_cliques` cliques.
-        - ("U", v, n_cliques): expected number of gates to detect sets of cliques with
-            up to `v` vertices and exactly `n_cliques` cliques.
+        - ("G", v, n_gates): the number of functions with exactly `n_gates` gates,
+            in sets of cliques that have _exactly_ `v` vertices.
+        - ("V", v): expected number of gates to detect sets of cliques with
+            exactly `v` vertices.
+        - ("U", v): expected number of gates to detect sets of cliques with
+            up to `v` vertices.
+        - ("C", n_cliques): expected number of gates for functions with
+            n_cliques cliques
         """
         self.n = n
         self.k = k
@@ -76,12 +78,13 @@ class ParityBound:
         # The variables for the LP.
         self.variables = []
         for v in range(self.k, self.n + 1):
-            for n_cliques in range(comb(v, self.k) + 1):
-                # Averages over number of vertices and cliques.
-                self.variables += [("V", v, n_cliques), ("U", v, n_cliques)]
-                # Counts for each number of gates.
-                for g in range(1, self.max_gates + 1):
-                    self.variables += [("G", v, n_cliques, g)]
+            # Averages over number of vertices and cliques.
+            self.variables += [("V", v), ("U", v)]
+            # Counts for each number of gates.
+            for g in range(1, self.max_gates + 1):
+                self.variables += [("G", v, g)]
+        for n_cliques in range(1, self.num_possible_cliques + 1):
+            self.variables += [("C", n_cliques)]
         # wrapper for LP solver
         self.lp = pulp_helper.PulpHelper(self.variables)
         # basis for gates
@@ -90,23 +93,20 @@ class ParityBound:
     def add_averaging_constraints(self):
         """Adds constraints on the average number of gates for each group."""
         for v in range(self.k, self.n + 1):
-            n_functions = self.function_counts[v]
-            for n_cliques in range(comb(v, self.k) + 1):
-                # get expected number of gates, based on counts
-                coefs = [
-                    (("G", v, n_cliques, g), g) for g in range(1, self.max_gates + 1)
-                ]
-                self.lp.add_constraint(
-                    [(("V", v, n_cliques), -n_functions[n_cliques])] + coefs,
-                    "=",
-                    0,
-                )
-                # Constrain the number of functions in this group
-                self.lp.add_constraint(
-                    [(("G", v, n_cliques, g), 1) for g in range(1, self.max_gates + 1)],
-                    "=",
-                    n_functions[n_cliques],
-                )
+            n_functions = sum(self.function_counts[v].values())
+            # get expected number of gates, based on counts
+            coefs = [(("G", v, g), g) for g in range(1, self.max_gates + 1)]
+            self.lp.add_constraint(
+                [(("V", v), -n_functions)] + coefs,
+                "=",
+                0,
+            )
+            # Constrain the number of functions in this group
+            self.lp.add_constraint(
+                [(("G", v, g), 1) for g in range(1, self.max_gates + 1)],
+                "=",
+                n_functions,
+            )
 
     def add_cumulative_constraints(self):
         """Add constraints connecting `V` and `U`.

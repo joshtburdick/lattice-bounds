@@ -95,7 +95,7 @@ class PulpHelper:
         """
         self.prob += self.vars[var_to_minimize]
         self.prob.writeLP("./bound.lp")
-        r = self.prob.solve(pulp.GLPK("glpsol", options=["--exact"]))
+        r = self.prob.solve(pulp.GLPK_CMD(msg=True, options=["--exact"]))
         # r = self.prob.solve(pulp.GLPK())
         # problem had a solution
         print(f"Result r = {r}")
@@ -119,11 +119,8 @@ class PulpHelper:
             objective_function += a * self.vars[x]
         self.prob += objective_function
 
-        self.prob.writeLP("./bound.lp")
-        # r = self.prob.solve(pulp.GLPK("glpsol",
-        #                              options=['--exact']))
-        # trying without the "exact" option
-        r = self.prob.solve(pulp.GLPK("glpsol"))
+        # self.prob.writeLP("./bound.lp")
+        r = self.prob.solve(pulp.GLPK_CMD(msg=True, options=["--exact"]))
 
         print(f"Result r = {r}")
 
