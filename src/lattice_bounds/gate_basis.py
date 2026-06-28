@@ -153,17 +153,16 @@ class UnboundedFanInNandBasis:
         # the ANDs, and then compute the OR using a final NAND gate.
         return num_or + 1
 
-    def xor_of_and_upper_bound(self, _num_and, num_xor):
+    def xor_of_and_upper_bound(self, num_and):
         """Upper bound of XORing some ANDs together.
 
-        This computes the AND of `_num_and` inputs, `num_xor` times, and
-        then XORs the results together.
+        This computes the AND of `num_and` inputs, and
+        computes XOR of that with something else.
         """
-        # Here, we can use two NAND gates per AND. The second NAND gate
-        # will be an inverter, which we can use one of in computing XOR.
-        # I think this means we need an additional three NAND gates per XOR.
-        # ??? can we do better?
-        return 2 * num_xor + 3 * num_xor - 1
+        # Here, we use 2 gates per AND, and 4 gates for XOR.
+        # However, we can save a gate by using the second NAND gate
+        # as an inverter, which we can use one of in computing XOR.
+        return 5
 
     def xor_upper_bound(self):
         """Upper bound on computing XOR of two functions."""
@@ -253,16 +252,16 @@ class TwoInputNandBasis:
         # we can just drop the final inverters, and use NAND gates to compute OR ?
         return num_or * gates_for_and + (num_or - 1)
 
-    def xor_of_and_upper_bound(self, num_and, num_xor):
+    def xor_of_and_upper_bound(self, num_and):
         """Upper bound of XORing some ANDs together.
 
-        This computes the AND of `num_and` inputs, `num_xor` times, and
-        then XORs the results together.
+        This computes the AND of `num_and` inputs, and then XORs
+        the result with something else.
         """
         gates_for_and = 2 * (num_and - 1)
-        # ??? Again, since the AND circuits all end with inverters,
-        # we can use the final inverters as part of the XOR circuit ?
-        return num_xor * gates_for_and + 2 * (num_xor - 1)
+        # Again, since the AND circuits all end with inverters,
+        # we can use a final inverter as part of the XOR circuit.
+        return gates_for_and + 3
 
     def xor_upper_bound(self):
         """Upper bound on computing XOR of two functions."""
@@ -271,4 +270,4 @@ class TwoInputNandBasis:
     def zonked_gates(self):
         """Number of gates zonked by feeding in a zero to one vertex."""
         # ??? is this needed?
-        return 1.0
+        return 1
