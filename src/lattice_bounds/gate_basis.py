@@ -153,7 +153,7 @@ class UnboundedFanInNandBasis:
         # the ANDs, and then compute the OR using a final NAND gate.
         return num_or + 1
 
-    def xor_of_and_upper_bound(self, num_and):
+    def xor_of_and_upper_bound(self, _num_and):
         """Upper bound of XORing some ANDs together.
 
         This computes the AND of `num_and` inputs, and
