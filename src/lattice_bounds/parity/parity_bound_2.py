@@ -52,6 +52,8 @@ class ParityBound:
             exactly `v` vertices.
         - ("U", v): expected number of gates to detect sets of cliques with
             up to `v` vertices.
+        - ("E", v, n_cliques): expected number of gates to detect sets of cliques with
+            exactly `v` vertices and exactly `n_cliques` cliques.
         - ("C", n_cliques): expected number of gates for functions with
             n_cliques cliques
         """
@@ -83,7 +85,10 @@ class ParityBound:
             # Counts for each number of gates.
             for g in range(1, self.max_gates + 1):
                 self.variables += [("G", v, g)]
-        for n_cliques in range(1, self.num_possible_cliques + 1):
+            # Averages by number of cliques.
+            for n_cliques in range(comb(v, self.k) + 1):
+                self.variables += [("E", v, n_cliques)]
+        for n_cliques in range(0, self.num_possible_cliques + 1):
             self.variables += [("C", n_cliques)]
         # wrapper for LP solver
         self.lp = pulp_helper.PulpHelper(self.variables)
@@ -92,8 +97,9 @@ class ParityBound:
 
     def add_averaging_constraints(self):
         """Adds constraints on the average number of gates for each group."""
+        # Connect function counts, and their expected value
         for v in range(self.k, self.n + 1):
-            n_functions = sum(self.function_counts[v].values())
+            n_functions = sum(self.function_counts[v])
             # get expected number of gates, based on counts
             coefs = [(("G", v, g), g) for g in range(1, self.max_gates + 1)]
             self.lp.add_constraint(
@@ -108,6 +114,33 @@ class ParityBound:
                 n_functions,
             )
 
+    def add_marginal_constraints(self):
+        """Add constraints for marginals of `E`, with respect to number of vertices
+        and number of cliques."""
+        # Marginals by number of cliques.
+        for n_cliques in range(self.num_possible_cliques + 1):
+            # Find range of number of vertices which have sets with <= n_cliques cliques.
+            coefs = [
+                (
+                    ("E", v_prime, n_cliques),
+                    self.function_counts[v_prime][n_cliques],
+                )
+                for v_prime in range(self.k, self.n + 1)
+                if n_cliques < self.function_counts[v_prime].shape[0]
+            ]
+            total_counts = sum([a1[1] for a1 in coefs])
+            self.lp.add_constraint([(("C", n_cliques), -total_counts)] + coefs, "=", 0)
+        # Marginals by number of vertices.
+        for v in range(self.k, self.n + 1):
+            counts = self.function_counts[v]
+            coefs = [
+                (("E", v, n_cliques), counts[n_cliques])
+                for n_cliques in range(len(counts))
+            ]
+            total_counts = sum([a1[1] for a1 in coefs])
+            self.lp.add_constraint([(("V", v), -total_counts)] + coefs, "=", 0)
+        # ??? add trivial lower bounds on these?
+
     def add_cumulative_constraints(self):
         """Add constraints connecting `V` and `U`.
 
@@ -116,11 +149,11 @@ class ParityBound:
         """
         for v in range(self.k, self.n + 1):
             coefs = [
-                (("V", v1), sum(self.function_counts[v1].values()))
+                (("V", v1), sum(self.function_counts[v1]))
                 for v1 in range(self.k, v + 1)
             ]
             total_counts = sum([a1[1] for a1 in coefs])
-            self.lp.add_constraint([("U", v), -total_counts] + coefs, "=", 0)
+            self.lp.add_constraint([(("U", v), -total_counts)] + coefs, "=", 0)
 
     def add_counting_bounds(self):
         """Adds counting bounds, for a given number of gates."""
@@ -144,7 +177,7 @@ class ParityBound:
     def add_zeroing_bound(self):
         """Adds bound from zeroing out one vertex."""
         # Add bound from zeroing one vertex (a sort of "step case").
-        for v in range(self.k, self.n):
+        for v in range(self.k + 1, self.n):
             # Probability of hitting at least one clique by zeroing a vertex.
             p_at_least_one_hit = 1 - 2 ** (-comb(v - 1, self.k - 1))
             # If we "hit" a clique, we "zonk" at least one NAND gate.
@@ -179,12 +212,12 @@ class ParityBound:
         """
         # We compute the bound for finding CLIQUE-PARITY, including
         # all the cliques.
-        coefs = {("U", self.n, self.num_possible_cliques): 1}
+        coefs = {("C", self.num_possible_cliques): 1}
         r = self.lp.solve_with_objective(coefs)
         if not r:
             return None
         n_cliques = np.arange(self.num_possible_cliques + 1)
-        bounds = np.array([r[("U", self.n, nc)] for nc in n_cliques])
+        bounds = np.array([r[("C", nc)] for nc in n_cliques])
         return pandas.DataFrame(
             {
                 "Num. cliques": n_cliques,
@@ -193,13 +226,13 @@ class ParityBound:
         )
 
 
-def get_bounds(n, k, use_zeroing, use_upper, max_gates=None):
+def get_bounds(n, k, use_zeroing, use_slope, max_gates=None):
     """Gets bounds with some set of constraints.
 
     Args:
         n, k: problem size
         use_zeroing: whether to use zeroing bound
-        use_upper: whether to use upper bound
+        use_slope: whether to use slope bound
         max_gates: maximum number of gates
     """
     # ??? track resource usage?
