@@ -4,6 +4,7 @@
 import argparse
 import fractions
 import itertools
+import pdb
 import sys
 
 import numpy as np
@@ -217,6 +218,7 @@ class ParityBound:
         if not r:
             return None
         n_cliques = np.arange(self.num_possible_cliques + 1)
+        # pdb.set_trace()
         bounds = np.array([r[("C", nc)] for nc in n_cliques])
         return pandas.DataFrame(
             {
@@ -239,6 +241,7 @@ def get_bounds(n, k, use_zeroing, use_slope, max_gates=None):
     sys.stderr.write(f"[bounding with n={n}, k={k}, max_gates={max_gates}]\n")
     bound = ParityBound(n, k, max_gates=max_gates)
     bound.add_averaging_constraints()
+    bound.add_marginal_constraints()
     bound.add_cumulative_constraints()
     bound.add_counting_bounds()
     if use_zeroing:
