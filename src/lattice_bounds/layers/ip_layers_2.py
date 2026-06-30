@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bound for finding most of the cliques."""
+"""Bound for detecting large sets of cliques."""
 
 import argparse
 import fractions
@@ -47,10 +47,12 @@ class LayerBound:
             the LP will be infeasible)
 
         This will have the following variables:
-        - ("G", v, n_cliques, n_gates): the number of functions with exactly `n_gates` gates,
-            in sets of cliques that have _exactly_ `v` vertices and _exactly_ `n_cliques` cliques.
-        - ("V", v, n_cliques): expected number of gates to detect sets of cliques with
-            exactly `v` vertices and exactly `n_cliques` cliques.
+        - ("G", v, n_gates): the number of functions with exactly `n_gates` gates,
+            in sets of cliques that have _exactly_ `v` vertices.
+        - ("U", v): expected number of gates to detect sets of cliques with
+            up to `v` vertices
+        - ("V", v): expected number of gates to detect sets of cliques with
+            exactly `v` vertices
         - ("U", v, n_cliques): expected number of gates to detect sets of cliques with
             up to `v` vertices and exactly `n_cliques` cliques.
         """
@@ -77,37 +79,37 @@ class LayerBound:
         # The variables for the LP.
         self.variables = []
         for v in range(self.k, self.n + 1):
+            # Counts of number of functions with a given number of gates.
+            for g in range(1, self.max_gates + 1):
+                self.variables += [("G", v, g)]
+            # Add the "V" and "U" variables for this number of vertices.
+            self.variables += [("U", v), ("V", v)]
+            # Averages over number of vertices and cliques.
             for n_cliques in range(comb(v, self.k) + 1):
-                # Averages over number of vertices and cliques.
-                self.variables += [("V", v, n_cliques), ("U", v, n_cliques)]
-                # Counts for each number of gates.
-                for g in range(1, self.max_gates + 1):
-                    self.variables += [("G", v, n_cliques, g)]
+                self.variables += [("U", v, n_cliques)]
+
         # wrapper for LP solver
         self.lp = pulp_helper.PulpHelper(self.variables)
         # basis for gates
+        # FIXME(jtb): make this a parameter to constructor
         self.basis = gate_basis.TwoInputNandBasis()
 
     def add_averaging_constraints(self):
         """Adds constraints on the average number of gates for each group."""
         for v in range(self.k, self.n + 1):
-            n_functions = self.function_counts[v]
-            for n_cliques in range(comb(v, self.k) + 1):
-                # get expected number of gates, based on counts
-                coefs = [
-                    (("G", v, n_cliques, g), g) for g in range(1, self.max_gates + 1)
-                ]
-                self.lp.add_constraint(
-                    [(("V", v, n_cliques), -n_functions[n_cliques])] + coefs,
-                    "=",
-                    0,
-                )
-                # Constrain the number of functions in this group
-                self.lp.add_constraint(
-                    [(("G", v, n_cliques, g), 1) for g in range(1, self.max_gates + 1)],
-                    "=",
-                    n_functions[n_cliques],
-                )
+            n_functions = self.function_counts[v].sum()
+            coefs = [(("G", v, g), g) for g in range(1, self.max_gates + 1)]
+            self.lp.add_constraint(
+                [(("V", v), -n_functions)] + coefs,
+                "=",
+                0,
+            )
+            # Constrain the number of functions in this group
+            self.lp.add_constraint(
+                [(("G", v, g), 1) for g in range(1, self.max_gates + 1)],
+                "=",
+                n_functions,
+            )
 
     def add_cumulative_constraints(self):
         """Add constraints connecting `V` and `U`.
@@ -116,16 +118,26 @@ class LayerBound:
         while `U` is "up to this number of vertices" (inclusive).
         """
         for v in range(self.k, self.n + 1):
-            for n_cliques in range(comb(v, self.k) + 1):
-                coefs = [
-                    (("V", v1, n_cliques), self.function_counts[v1][n_cliques])
-                    for v1 in range(self.k, v + 1)
-                    if n_cliques < len(self.function_counts[v1])
-                ]
-                total_counts = sum([a1[1] for a1 in coefs])
-                self.lp.add_constraint(
-                    [(("U", v, n_cliques), -total_counts)] + coefs, "=", 0
-                )
+            coefs = [
+                (("V", v1), self.function_counts[v1].sum())
+                for v1 in range(self.k, v + 1)
+            ]
+            total_counts = sum([a1[1] for a1 in coefs])
+            self.lp.add_constraint([(("U", v), -total_counts)] + coefs, "=", 0)
+
+    def add_marginal_constraints(self):
+        """Connects U vars, marginalizing out the number of cliques.
+
+        There is one of these constraints for each number of vertices.
+        """
+        for v in range(self.k, self.n + 1):
+            n_functions = self.function_counts[v]
+            coefs = [
+                (("U", v, n_cliques), n_functions[n_cliques])
+                for n_cliques in range(comb(v, self.k) + 1)
+            ]
+            total_counts = sum([a1[1] for a1 in coefs])
+            self.lp.add_constraint([(("U", v), -total_counts)] + coefs, "=", 0)
 
     def add_counting_bounds(self):
         """Adds counting bounds, for a given number of gates."""
@@ -141,10 +153,13 @@ class LayerBound:
         # that many gates.
         for g in range(1, self.max_gates + 1):
             self.lp.add_constraint(
-                [(("G", v, n_cliques, g), 1) for (_, v, n_cliques) in v_vars],
+                [(("G", v, g), 1) for (_, v) in v_vars],
                 "<=",
                 num_possible_functions[g],
             )
+        # Add bound on detecting 0 cliques
+        for v in range(self.k, self.n + 1):
+            self.lp.add_constraint([(("U", v, 0), 1)], "=", 1)
 
     def add_zeroing_bound(self):
         """Adds bound from zeroing out one vertex."""
@@ -157,7 +172,7 @@ class LayerBound:
         # vanish as we add more cliques. So for simplicity, we don't
         # do this.)
         for v in range(self.k, self.n + 1):
-            self.lp.add_constraint([(("V", v, 1), 1)], ">=", 2)
+            self.lp.add_constraint([(("U", v, 1), 1)], ">=", 2)
         # Add bound from zeroing one vertex (a sort of "step case").
         for v in range(self.k + 1, self.n + 1):
             # loop through number of cliques in that graph
@@ -179,8 +194,8 @@ class LayerBound:
                 n_cliques_after = n_cliques_before - n_cliques_hit
 
                 # The probability of some number of cliques being hit
-                # (again, assuming that we start with only v vertices are "in use" by
-                # the hyperedges)
+                # (again, assuming that we start with only v vertices
+                # "in use" by the hyperedges)
                 def p_hit(x):
                     return hyperg_frac(
                         comb(v, self.k), n_cliques_before, max_cliques_hit, x
@@ -268,6 +283,7 @@ def get_bounds(n, k, layer_size, use_zeroing, use_upper, max_gates=None):
     bound.add_averaging_constraints()
     bound.add_cumulative_constraints()
     bound.add_counting_bounds()
+    bound.add_marginal_constraints()
     if use_zeroing:
         bound.add_zeroing_bound()
     if use_upper:
