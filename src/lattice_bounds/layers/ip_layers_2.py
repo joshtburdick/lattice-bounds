@@ -22,8 +22,9 @@ def comb(n, k):
     return scipy.special.comb(n, k, exact=True)
 
 
-# Hypergeometric distribution, returning an exact fractions.fraction .
 def hyperg_frac(N, K, n, k):
+    """Return probability of drawing k successes in n draws from N items with K successes."""
+    # FIXME(jtb): improve argument names?
     # based on https://en.wikipedia.org/wiki/Hypergeometric_distribution
     # note that we don't try to optimize this
     return fractions.Fraction(comb(K, k) * comb(N - K, n - k), comb(N, n))
@@ -205,8 +206,8 @@ class LayerBound:
                 p_at_least_one_hit = 1 - p_hit(0)
                 # Coefficients for the difference in the number of gates,
                 # before and after zeroing out a vertex.
-                A = [(("U", v, n_cliques_before), 1)]
-                A += [
+                coefs = [(("U", v, n_cliques_before), 1)]
+                coefs += [
                     (("U", v - 1, n_cliques_after[j]), -p_hit(n_cliques_hit[j]))
                     for j in range(len(n_cliques_after))
                 ]
