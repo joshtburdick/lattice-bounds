@@ -242,7 +242,7 @@ def main():
             use_upper,
         )
         for use_zeroing in [False, True]
-        for use_upper in [False]
+        for use_upper in [False, True]
     ]
 
     bounds = pandas.concat(bounds)
