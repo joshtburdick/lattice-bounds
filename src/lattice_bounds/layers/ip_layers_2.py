@@ -168,6 +168,9 @@ class LayerBound:
         # the number of additional gates needed to detect one more clique.
         # FIXME (jtb): allow using a different basis?
         gates_per_clique = 2 * inputs_per_clique
+        # "base case": detecting any single clique requires at most this many gates
+        self.lp.add_constraint([(("V", self.k), 1)], "<=", gates_per_clique)
+        # "step case": add more gates
         for v in range(self.k + 1, self.n + 1):
             # The expected number of new cliques.
             n_expected_new_cliques = comb(v - 1, self.k - 1) / 2
@@ -192,7 +195,7 @@ class LayerBound:
         # each layer. To simplify plotting, we include the two endpoints
         # of each layer.
         n_vertices = np.arange(self.k, self.n + 1)
-        bounds = np.array([r[("U", v)] for v in range(self.k, self.n + 1)])
+        bounds = np.array([r[("V", v)] for v in range(self.k, self.n + 1)])
         return pandas.DataFrame(
             {
                 "Num. vertices": n_vertices,
