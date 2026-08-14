@@ -83,8 +83,15 @@ class SubsetBound:
     def add_downward_edge_constraints(self):
         """Adds constraints that zeroing a vertex zonks at least one gate."""
         for a in self.big_v:
-            if len(a) <= self.k:
+            # The circuit for each clique has at least one gate.
+            if len(a) == self.k:
+                self.lp.add_constraint(
+                    [(("V", a, g), 1) for g in range(self.max_gates)],
+                    ">=",
+                    1,
+                )
                 continue
+            # If a has > k vertices, zeroing it out must zonk at least one gate,
             for v in a:
                 b = a - frozenset([v])
                 # constraint that a is a superset of b
@@ -94,7 +101,7 @@ class SubsetBound:
                             (("V", a, g), 1),
                             (("V", b, g), -1),
                         ],
-                        "<=",
+                        ">=",
                         0,
                     )
                 # constraint that a has at least one more gate than b
@@ -118,19 +125,25 @@ class SubsetBound:
                 # is 1 but vertex b is 0.
                 self.lp.add_constraint(
                     [
-                        (("E", a, b, gate_id), -1),
-                        (("V", a, gate_id), -1),
+                        (("E", a, b, gate_id), 1),
+                        (("V", b, gate_id), 1),
                     ],
                     "<=",
-                    0,
+                    1,
                 )
                 self.lp.add_constraint(
                     [
                         (("E", a, b, gate_id), -1),
-                        (("V", b, gate_id), 1),
+                        (("V", a, gate_id), 1),
                     ],
                     "<=",
                     0,
+                )
+                # Also, at least one of these must be >= 1.
+                self.lp.add_constraint(
+                    [(("E", a, b, g), 1) for g in range(self.max_gates)],
+                    ">=",
+                    1,
                 )
 
     def get_all_bounds(self):
