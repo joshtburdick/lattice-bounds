@@ -120,7 +120,9 @@ class PulpHelper:
         self.prob += objective_function
 
         # self.prob.writeLP("./bound.lp")
-        r = self.prob.solve(pulp.GLPK_CMD(msg=True, options=["--exact"]))
+        # r = self.prob.solve(pulp.GLPK_CMD(msg=True, options=["--exact"]))
+        # trying non-exact...
+        r = self.prob.solve(pulp.GLPK(msg=True))
 
         print(f"Result r = {r}")
 
