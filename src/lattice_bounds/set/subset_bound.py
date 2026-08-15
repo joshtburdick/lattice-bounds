@@ -126,18 +126,18 @@ class SubsetBound:
                 self.lp.add_constraint(
                     [
                         (("E", a, b, gate_id), 1),
+                        (("V", a, gate_id), -1),
+                    ],
+                    "<=",
+                    0,
+                )
+                self.lp.add_constraint(
+                    [
+                        (("E", a, b, gate_id), 1),
                         (("V", b, gate_id), 1),
                     ],
                     "<=",
                     1,
-                )
-                self.lp.add_constraint(
-                    [
-                        (("E", a, b, gate_id), -1),
-                        (("V", a, gate_id), 1),
-                    ],
-                    "<=",
-                    0,
                 )
                 # Also, at least one of these must be >= 1.
                 self.lp.add_constraint(
