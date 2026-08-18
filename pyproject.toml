@@ -20,18 +20,11 @@ dependencies = [
     "pulp>=2.16.0",
     "scipy>=1.13.0",
     "seaborn>=0.13.0",
-    
+    "python-sat",
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest",
-    "pylint",
-    "black",
-    "isort",
-    "mypy",
-    "ruff",
-]
+dev = ["pytest", "pylint", "black", "isort", "mypy", "ruff"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

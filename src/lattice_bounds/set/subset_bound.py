@@ -12,8 +12,8 @@ import pandas
 from scipy.special import comb
 import scipy.stats
 
-from lattice_bounds import hypergraph_counter
-from lattice_bounds import pulp_helper
+import pysat
+import pysat.formula
 
 
 class SubsetBound:
@@ -29,13 +29,15 @@ class SubsetBound:
         For now, we only are considering 'zeroing out' vertices;
         therefore, we label sets of cliques by the *set of vertices*.
 
-        This will have the following 0-1 indicator variables:
-        - ("V", a, gate_id): 1 iff `gate_id` is in the circuit
+        This will have the following boolean variables:
+        - ("V", a, gate_id): true iff `gate_id` is in the circuit
             for the set of cliques `a`.
         - ("E", a, b, gate_id): for each distinct a and b such that
-            k <= |a| = |b| < n, this is 1 iff `gate_id`
+            k <= |a| = |b| < n, this is true iff `gate_id`
             is in the circuit for `a` but not for `b`.
+            ??? are "E" variables needed?
         """
+
         self.n = n
         self.k = k
         if k < 3:
@@ -66,19 +68,18 @@ class SubsetBound:
         for a in self.big_v:
             for gate_id in range(self.max_gates):
                 self.variables += [("V", a, gate_id)]
-        for a, b in self.big_e:
-            for gate_id in range(self.max_gates):
-                self.variables += [("E", a, b, gate_id)]
+        self.var_to_object = {x: pysat.formula.Atom(str(x)) for x in self.variables}
 
-        # wrapper for LP solver
-        self.lp = pulp_helper.PulpHelper(self.variables)
-
-        # bound all variables in [0, 1] (there may be a
-        # special function to do this, but for now, we
-        # skip that)
-        for v in self.variables:
-            self.lp.add_constraint([(v, 1)], ">=", 0)
-            self.lp.add_constraint([(v, 1)], "<=", 1)
+        if False:
+            for a, b in self.big_e:
+                for gate_id in range(self.max_gates):
+                    self.variables += [("E", a, b, gate_id)]
+        # setup for pysat
+        # ??? make this a bit more robust; e.g. checking whether the
+        # directory exists
+        pysat.params["data_dirs"] = "tmp/pysat"
+        pysat.solvers.SolverNames.default = pysat.solvers.Glucose3
+        self.solver = None
 
     def add_downward_edge_constraints(self):
         """Adds constraints that zeroing a vertex zonks at least one gate."""
