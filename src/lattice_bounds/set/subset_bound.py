@@ -13,7 +13,7 @@ from scipy.special import comb
 import scipy.stats
 
 import pysat
-import pysat.formula
+from pysat import formula
 
 
 class SubsetBound:
@@ -54,32 +54,51 @@ class SubsetBound:
         ]
         self.num_big_v = len(self.big_v)
 
-        # The "sideways edge" (a, b) ensures that there's some gate in
-        # the circuit for a that's not in b.
-        self.big_e = []
-        for num_vertices in range(self.k, self.n):
-            vertex_sets = [v for v in self.big_v if len(v) == num_vertices]
-            for a, b in itertools.combinations(vertex_sets, 2):
-                self.big_e += [(a, b), (b, a)]
-        self.num_big_e = len(self.big_e)
-
         # The variables for the LP.
         self.variables = []
         for a in self.big_v:
             for gate_id in range(self.max_gates):
-                self.variables += [("V", a, gate_id)]
+                self.variables += [(a, gate_id)]
         self.var_to_object = {x: pysat.formula.Atom(str(x)) for x in self.variables}
 
-        if False:
-            for a, b in self.big_e:
-                for gate_id in range(self.max_gates):
-                    self.variables += [("E", a, b, gate_id)]
         # setup for pysat
         # ??? make this a bit more robust; e.g. checking whether the
         # directory exists
         pysat.params["data_dirs"] = "tmp/pysat"
         pysat.solvers.SolverNames.default = pysat.solvers.Glucose3
-        self.solver = None
+        self.solver = pysat.solvers.Solver()
+
+    def add_different_gates_constraint(self, a, b):
+        """Adds a constraint that `a` contains at least one gate not in `b`."""
+        pass
+
+    def add_subset_constraints(self):
+        """Adds constraints that smaller sets of vertices correspond to smaller circuits.
+
+        If A and B are sets of vertices, with B a subset of A, then the set of gates
+        for B must be a subset of the set of gates for A. (Although when using NAND gates,
+        it's a strict subset, this constraint doesn't enforce that.)
+        """
+        for a in self.big_v:
+            # The circuit for each individual clique has at least one gate.
+            if len(a) == self.k:
+                self.solver.add_clause(
+                    formula.Or(
+                        [self.var_to_object[(a, g)] for g in range(self.max_gates)]
+                    )
+                )
+
+            # If a has > k vertices, then sets with one fewer vertex must be
+            # contained in a. (We don't enforce "strictly contained" here.)
+            for v in a:
+                b = a - frozenset([v])
+                for g in range(self.max_gates):
+                    self.solver.add_clause(
+                        formula.Or(
+                            self.var_to_object[(a, g)],
+                            neg_atom(self.var_to_object[(b, g)]),
+                        )
+                    )
 
     def add_downward_edge_constraints(self):
         """Adds constraints that zeroing a vertex zonks at least one gate."""
