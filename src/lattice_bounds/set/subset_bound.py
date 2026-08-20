@@ -13,13 +13,13 @@ from scipy.special import comb
 import scipy.stats
 
 import pysat
-from pysat import formula
+from pysat import formula, solvers
 
 
 class SubsetBound:
     """Bound based on subsets of gates."""
 
-    def __init__(self, n, k, max_gates=None):
+    def __init__(self, n, k, max_gates):
         """Constructor gets graph info, and sets up variable names.
 
         n: number of vertices in the graph
@@ -54,83 +54,57 @@ class SubsetBound:
         ]
         self.num_big_v = len(self.big_v)
 
-        # The variables for the LP.
-        self.variables = []
+        # Enumerate the variables (this may not be necessary)
+        self.variable_names = []
         for a in self.big_v:
             for gate_id in range(self.max_gates):
-                self.variables += [(a, gate_id)]
-        self.var_to_object = {x: pysat.formula.Atom(str(x)) for x in self.variables}
+                self.variable_names += [(a, gate_id)]
+        self.var_to_object = {x: formula.Atom(str(x)) for x in self.variable_names}
 
-        # setup for pysat
-        # ??? make this a bit more robust; e.g. checking whether the
-        # directory exists
-        pysat.params["data_dirs"] = "tmp/pysat"
-        pysat.solvers.SolverNames.default = pysat.solvers.Glucose3
-        self.solver = pysat.solvers.Solver()
+        self.solver = solvers.Solver(name="g3")
 
     def add_different_gates_constraint(self, a, b):
-        """Adds a constraint that `a` contains at least one gate not in `b`."""
-        pass
+        """Adds a constraint that `b` contains at least one gate not in `a`."""
 
-    def add_subset_constraints(self):
-        """Adds constraints that smaller sets of vertices correspond to smaller circuits.
+        # Each of these clauses indicates that a particular gate is in `b` but not `a`.
+        clause = formula.Atom(False)
+        for g in range(self.max_gates):
+            clause = formula.Or(
+                clause,
+                formula.And(
+                    formula.Neg(self.var_to_object[(a, g)]),
+                    self.var_to_object[(b, g)],
+                ),
+            )
+        self.solver.append_formula(clause)
 
-        If A and B are sets of vertices, with B a subset of A, then the set of gates
-        for B must be a subset of the set of gates for A. (Although when using NAND gates,
-        it's a strict subset, this constraint doesn't enforce that.)
-        """
+    def add_downward_constraints(self):
+        """Adds constraints that smaller sets of vertices correspond to smaller circuits."""
         for a in self.big_v:
             # The circuit for each individual clique has at least one gate.
             if len(a) == self.k:
-                self.solver.add_clause(
-                    formula.Or(
-                        [self.var_to_object[(a, g)] for g in range(self.max_gates)]
+                clause = formula.Atom(False)
+                for g in range(self.max_gates):
+                    clause = formula.Or(
+                        clause,
+                        self.var_to_object[(a, g)],
                     )
-                )
-
+                self.solver.append_formula(clause)
+                continue
             # If a has > k vertices, then sets with one fewer vertex must be
-            # contained in a. (We don't enforce "strictly contained" here.)
+            # contained in a.
             for v in a:
                 b = a - frozenset([v])
                 for g in range(self.max_gates):
-                    self.solver.add_clause(
+                    # Any individual gate which is in `a` is also in `b`.
+                    self.solver.append_formula(
                         formula.Or(
                             self.var_to_object[(a, g)],
-                            neg_atom(self.var_to_object[(b, g)]),
+                            formula.Neg(self.var_to_object[(b, g)]),
                         )
                     )
-
-    def add_downward_edge_constraints(self):
-        """Adds constraints that zeroing a vertex zonks at least one gate."""
-        for a in self.big_v:
-            # The circuit for each clique has at least one gate.
-            if len(a) == self.k:
-                self.lp.add_constraint(
-                    [(("V", a, g), 1) for g in range(self.max_gates)],
-                    ">=",
-                    1,
-                )
-                continue
-            # If a has > k vertices, zeroing it out must zonk at least one gate,
-            for v in a:
-                b = a - frozenset([v])
-                # constraint that a is a superset of b
-                for g in range(self.max_gates):
-                    self.lp.add_constraint(
-                        [
-                            (("V", a, g), 1),
-                            (("V", b, g), -1),
-                        ],
-                        ">=",
-                        0,
-                    )
-                # constraint that a has at least one more gate than b
-                self.lp.add_constraint(
-                    [(("V", a, g), 1) for g in range(self.max_gates)]
-                    + [(("V", b, g), -1) for g in range(self.max_gates)],
-                    ">=",
-                    1,
-                )
+                # There's at least one gate in `a` that's not in `b`.
+                self.add_different_gates_constraint(b, a)
 
     def add_sideways_edge_constraints(self):
         """These define the edge sets, relative to vertex sets.
@@ -138,77 +112,51 @@ class SubsetBound:
         These enforce that different sets (of a given size) must
         contain *something* different from each other.
         """
-        for a, b in self.big_e:
-            for gate_id in range(self.max_gates):
-                # These two constraints, in combination, mean that,
-                # for each gate, edge a->b is only 1 when vertex a
-                # is 1 but vertex b is 0.
-                self.lp.add_constraint(
-                    [
-                        (("E", a, b, gate_id), 1),
-                        (("V", a, gate_id), -1),
-                    ],
-                    "<=",
-                    0,
-                )
-                self.lp.add_constraint(
-                    [
-                        (("E", a, b, gate_id), 1),
-                        (("V", b, gate_id), 1),
-                    ],
-                    "<=",
-                    1,
-                )
-                # Also, at least one of these must be >= 1.
-                self.lp.add_constraint(
-                    [(("E", a, b, g), 1) for g in range(self.max_gates)],
-                    ">=",
-                    1,
-                )
+        # Loop through pairs of vertex sets of the same size
+        for k in range(self.k, self.n):
+            vertex_sets = [a for a in self.big_v if len(a) == k]
+            for i in range(len(vertex_sets)):
+                for j in range(len(vertex_sets)):
+                    if i == j:
+                        continue
+                    a, b = vertex_sets[i], vertex_sets[j]
+                    self.add_different_gates_constraint(a, b)
 
-    def get_all_bounds(self):
-        """Gets bounds for each possible number of cliques.
+    def add_sorting_constraints(self):
+        """Add constraints that enforce some ordering on the gates.
 
-        Returns:
-            pandas.DataFrame: bounds for each possible number of cliques
+        This shouldn't change whether there's a solution, but it might
+        speed up solving.
         """
-        vertices = frozenset(range(self.n))
-        # Objective function: how many of the gates are in the set
-        # with all of the vertices?
-        coefs = {("V", vertices, g): 1 for g in range(self.max_gates)}
-        r = self.lp.solve_with_objective(coefs)
-        bound = -1
-        if r:
-            bound = r["__objective__"]
-        return pandas.DataFrame(
-            {
-                "n": [self.n],
-                "k": [self.k],
-                "max_gates": [self.max_gates],
-                "min_gates_bound": [bound],
-            }
-        )
+        raise NotImplementedError("Sorting constraints not implemented yet.")
+
+    def check_possible(self):
+        """Check if it's possible to have this number of gates."""
+        return self.solver.solve()
 
 
-def get_bounds(n, k, use_downward, use_sideways, max_gates=None):
-    """Gets bounds with some set of constraints.
-
-    Args:
-        n, k: problem size
-        use_downward: whether to use downward-edge constraints
-        use_sideways: whether to use sideways-edge constraints
-        max_gates: maximum number of gates
-    """
-    # ??? track resource usage?
-    sys.stderr.write(f"[bounding with n={n}, k={k}, max_gates={max_gates}]\n")
-    bound = SubsetBound(n, k, max_gates=max_gates)
-    if use_downward:
-        bound.add_downward_edge_constraints()
-    if use_sideways:
-        bound.add_sideways_edge_constraints()
-    b = bound.get_all_bounds()
-    b["label"] = f"downward={use_downward}, sideways={use_sideways}"
-    return b
+def check_for_lower_bound(n, k, use_downward, use_sideways):
+    """Checks for a lower bound of k."""
+    print(
+        f"Checking for lower bound for n={n}, k={k}, downward={use_downward}, sideways={use_sideways}"
+    )
+    min_possible_gates = None
+    # We know that the number of non-output gates is no more than $\binom{n}{k}$.
+    for num_gates in range(1, comb(n, k, exact=True) + 1):
+        print(num_gates, end=" ")
+        sys.stdout.flush()
+        bound = SubsetBound(n, k, max_gates=num_gates)
+        if use_downward:
+            bound.add_downward_constraints()
+        if use_sideways:
+            bound.add_sideways_edge_constraints()
+        if bound.check_possible():
+            min_possible_gates = num_gates
+            break
+    print(
+        f"\nn={n}, k={k}, downward={use_downward}, sideways={use_sideways} -> num. non-output gates >=  {min_possible_gates}\n"
+    )
+    return min_possible_gates
 
 
 def parse_args():
@@ -216,11 +164,6 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Bounds on PARITY-CLIQUE.")
     parser.add_argument("n", type=int, help="Number of vertices")
     parser.add_argument("k", type=int, help="Size of cliques")
-    parser.add_argument("--max-gates", type=int, help="Maximum number of gates")
-    parser.add_argument(
-        "--result-file",
-        help="Write result to indicated file (by default, writes to stdout)",
-    )
     return parser.parse_args()
 
 
@@ -228,21 +171,15 @@ def main():
     """Main execution entry point."""
     args = parse_args()
     bounds = [
-        get_bounds(
+        check_for_lower_bound(
             args.n,
             args.k,
             use_downward,
             use_sideways,
-            max_gates=args.max_gates,
         )
         for use_downward in [False, True]
         for use_sideways in [False, True]
     ]
-
-    bounds = pandas.concat(bounds)
-    out_file = args.result_file if args.result_file else "/dev/stdout"
-    with open(out_file, "wt", encoding="utf-8") as f:
-        bounds.to_csv(f, index=False)
 
 
 if __name__ == "__main__":
