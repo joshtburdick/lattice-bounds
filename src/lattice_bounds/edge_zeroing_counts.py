@@ -1,3 +1,7 @@
+"""
+Counts of sets after zeroing out edges.
+"""
+
 from scipy import special
 
 
@@ -27,7 +31,8 @@ class EdgeZeroingCounter:
         for v in range(k, n + 1):
             # We may just have a complete graph of v vertices.
             self.vertex_edge_counts[num_edges(v, 0)] = (v, 0)
-            # Or we may have one vertex with some number of edges;
-            # there need to be at least enough edges for there to be at least one k-clique.
+            # Or we may have that, plus one vertex connected to some
+            # of the `v` vertices. There need to be at least enough
+            # edges for there to be at least one k-clique, though.
             for e in range(k - 1, n):
                 self.vertex_edge_counts[num_edges(v, e)] = (v, e)
