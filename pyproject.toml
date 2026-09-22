@@ -28,3 +28,7 @@ dev = ["pytest", "pylint", "black", "isort", "mypy", "ruff"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
