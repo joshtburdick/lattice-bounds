@@ -43,28 +43,21 @@ class VertexZeroing:
         self.n = n
         self.k = k
 
-        def num_vertices(v, zeroed_out):
-            return v - zeroed_out
+        # We consider the "size" to be the number of vertices
+        # present in the set.
+        self.sizes = list(range(k, n + 1))
 
-        # Stores the counts for a given number of vertices and extra edges.
-        # Key: (vertices, extra_edges), Value: count
-        self.vertex_edge_counts = {0: (0, 0)}
-        for v in range(k, n + 1):
-            # We may just have a complete graph of v vertices.
-            self.vertex_edge_counts[num_vertices(v, 0)] = (v, 0)
-            # Or we may have that, plus one vertex connected to some
-            # of the `v` vertices. There need to be at least enough
-            # edges for there to be at least one k-clique, though.
-            for e in range(k - 1, n):
-                self.vertex_edge_counts[num_vertices(v, e)] = (v, e)
+        self.num_sets = [special.comb(v, k, exact=True) for v in self.sizes]
+        self.num_symmetries = [special.comb(n, v, exact=True) for v in self.sizes]
 
-    def num_sets(self, num_vertices):
-        """Number of sets of cliques with up to num_vertices vertices."""
-        return 2 ** special.comb(num_vertices, self.k, exact=True)
+    def get_layer_counts(self, layer_bounds):
+        """Gets the number of sets at each layer, given the layer bounds.
 
-    def num_symmetries(self, num_vertices):
-        """Number of ways a set of num_vertices can be chosen from the n vertices."""
-        return int(special.comb(self.n, num_vertices, exact=True))
+        layer_bounds: A list of integers, where the ith layer is given by
+        layer_bounds[i] <= size < layer_bounds[i+1].
+        Returns: a 2-D NumPy array, where the entry (i, j) is the
+        number of sets of cliques with exact rank i, in layer j.
+        """
 
 
 class EdgeZeroing:
@@ -86,28 +79,32 @@ class EdgeZeroing:
         self.n = n
         self.k = k
 
-        def num_edges(vertices, extra_edges):
-            return int(special.comb(vertices, 2, exact=True)) + extra_edges
-
         # Stores the counts for a given number of vertices and extra edges.
-        # Key: (vertices, extra_edges), Value: count
-        self.vertex_edge_counts = {0: (0, 0)}
+        self.vertex_edge_counts = [(0, 0)]
         for v in range(k, n + 1):
             # We may just have a complete graph of v vertices.
-            self.vertex_edge_counts[num_edges(v, 0)] = (v, 0)
+            self.vertex_edge_counts.append((v, 0))
             # Or we may have that, plus one vertex connected to some
             # of the `v` vertices. There need to be at least enough
             # edges for there to be at least one k-clique, though.
             for e in range(k - 1, n):
-                self.vertex_edge_counts[num_edges(v, e)] = (v, e)
+                self.vertex_edge_counts.append((v, e))
 
-    def num_sets(self, num_vertices, extra_edges):
-        """Number of k-cliques in a graph with `num_vertices` and `extra_edges` extra edges."""
+    def get_num_edges(self, vertices, extra_edges):
+        """Number of edges in a graph with `vertices` and `extra_edges` extra edges.
+
+        We use this as a convenient measure of 'size' (even though it jumps around
+        when a vertex runs out of edges.)
+        """
+        return int(special.comb(vertices, 2, exact=True)) + extra_edges
+
+    def get_num_sets(self, num_vertices, extra_edges):
+        """Number of possible k-cliques in a graph with `num_vertices` and `extra_edges` extra edges."""
         num_sets_in_complete_graph = special.comb(num_vertices, self.k, exact=True)
         num_additional_sets = special.comb(num_vertices - k + 1, self.k - 1, exact=True)
         return num_sets_in_complete_graph + num_additional_sets
 
-    def num_symmetries(self, num_vertices, extra_edges):
+    def get_num_symmetries(self, num_vertices, extra_edges):
         """Number of ways to choose the edges incident to the extra vertex."""
         # first, we choose num_vertices vertices
         num_clique_choices = int(special.comb(self.n, num_vertices, exact=True))
