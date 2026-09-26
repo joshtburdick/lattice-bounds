@@ -31,6 +31,16 @@ class ZeroingCounts:
         else:
             raise ValueError("Invalid zeroing type.")
 
+    def get_layer_counts(self, layer_bounds):
+        """Gets the number of sets at each layer, given the layer bounds.
+
+        layer_bounds: A list of integers, where the ith layer is given by
+        layer_bounds[i] <= size < layer_bounds[i+1].
+        Returns: a 2-D NumPy array, where the entry (i, j) is the
+        number of sets of cliques with exact rank i, in layer j.
+        """
+        pass
+
 
 class VertexZeroing:
     """Getting counts of possible vertex sets, when zeroing vertices.
@@ -49,15 +59,6 @@ class VertexZeroing:
 
         self.num_sets = [special.comb(v, k, exact=True) for v in self.sizes]
         self.num_symmetries = [special.comb(n, v, exact=True) for v in self.sizes]
-
-    def get_layer_counts(self, layer_bounds):
-        """Gets the number of sets at each layer, given the layer bounds.
-
-        layer_bounds: A list of integers, where the ith layer is given by
-        layer_bounds[i] <= size < layer_bounds[i+1].
-        Returns: a 2-D NumPy array, where the entry (i, j) is the
-        number of sets of cliques with exact rank i, in layer j.
-        """
 
 
 class EdgeZeroing:
