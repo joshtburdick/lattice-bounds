@@ -48,16 +48,71 @@ class ZeroingCounts:
         assert sum(num_sets_exact) == 2 ** special.comb(self.n, self.k, exact=True)
         return num_sets_exact
 
+    def num_sets_by_size(self):
+        """Gets the number of sets of cliques by size, for each rank.
+
+        Returns: a list of numpy arrays, where the i-th array has length
+        equal to the number of possible sizes for rank i, and the j-th entry
+        is the number of sets with rank _up to_ i and size j.
+        """
+        all_num_sets_by_size = []
+        for rank in range(self.zeroing_strategy.num_ranks):
+            num_sets = self.zeroing_strategy.num_sets(rank)
+            num_symmetries = self.zeroing_strategy.num_symmetries(rank)
+            num_sets_by_size = np.array(
+                [
+                    special.comb(self.zeroing_strategy.size(rank), s, exact=True)
+                    * num_symmetries
+                    for s in range(self.zeroing_strategy.size(rank) + 1)
+                ]
+            )
+            assert np.sum(num_sets_by_size) == num_sets
+            all_num_sets_by_size.append(num_sets_by_size)
+        return all_num_sets_by_size
+
+    def num_sets_by_size_exact_rank(self):
+        """Like num_sets_by_size(), but only counts sets with exactly some rank.
+
+        Returns: a list of numpy arrays, where the i-th array has length
+        equal to the number of possible sizes for rank i, and the j-th entry
+        is the number of sets with rank i and size j.
+        """
+        num_sets_by_size_cumulative = self.num_sets_by_size()
+        num_sets_by_size_exact_rank = np.diff(
+            num_sets_by_size_cumulative, axis=0, prepend=0
+        )
+        assert np.all(
+            np.sum(num_sets_by_size_exact_rank, axis=1) == self.num_sets_exact_rank()
+        )
+        return num_sets_by_size_exact_rank
+
     def get_layer_counts(self, layer_bounds):
         """Gets the number of sets at each layer, given the layer bounds.
 
-        layer_bounds: A list of integers, where the ith layer is given by
+        layer_bounds: A sorted list of integers, where the ith layer is given by
             `layer_bounds[i]` <= number of cliques < `layer_bounds[i+1]`.
         Returns: a 2-D NumPy array of shape (num_ranks, num_layers),
             where entry (i, j) is the number of sets of cliques with
             exact rank i, in layer j.
         """
-        pass
+        num_sets_by_size_exact_rank = self.num_sets_by_size_exact_rank()
+        num_layers = len(layer_bounds)
+        layer_counts = np.zeros(
+            (self.zeroing_strategy.num_ranks, num_layers), dtype=np.object
+        )
+        for rank in range(self.zeroing_strategy.num_ranks):
+            layer_counts[rank] = np.array(
+                [
+                    sum(
+                        num_sets_by_size_exact_rank[rank][
+                            layer_bounds[j] : layer_bounds[j + 1]
+                        ]
+                    )
+                    for j in range(num_layers)
+                ]
+            )
+        assert np.all(np.sum(layer_counts, axis=1) == self.num_sets_exact_rank())
+        return layer_counts
 
 
 class VertexZeroing:
