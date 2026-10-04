@@ -6,8 +6,12 @@ of sets of cliques, which are decreasing in size. We number these
 sets, calling the empty set "rank 0", one clique "rank 1", ...
 up to some rank. (The maximum rank will differ when zeroing out
 edges vs. vertices.)
+
+For now, we ignore symmetries. This limits the utility of
+the bounds, but it keeps the logic simpler.
 """
 
+import numpy as np
 from scipy import special
 
 
@@ -58,15 +62,15 @@ class ZeroingCounts:
         all_num_sets_by_size = []
         for rank in range(self.zeroing_strategy.num_ranks):
             num_sets = self.zeroing_strategy.num_sets(rank)
-            num_symmetries = self.zeroing_strategy.num_symmetries(rank)
             num_sets_by_size = np.array(
                 [
-                    special.comb(self.zeroing_strategy.size(rank), s, exact=True)
-                    * num_symmetries
-                    for s in range(self.zeroing_strategy.size(rank) + 1)
+                    special.comb(self.zeroing_strategy.num_sets(rank), s, exact=True)
+                    for s in range(self.zeroing_strategy.num_sets(rank) + 1)
                 ]
             )
-            assert np.sum(num_sets_by_size) == num_sets
+            # There's only one empty set of cliques, so we manually set the
+            # number of sets with size 0 to 1.
+            num_sets_by_size[0] = 1
             all_num_sets_by_size.append(num_sets_by_size)
         return all_num_sets_by_size
 
@@ -127,20 +131,16 @@ class VertexZeroing:
         self.k = k
 
         # We consider the "size" to be the number of vertices
-        # present in the set.
-        self.num_vertices = list(range(k, n + 1))
+        # present in the set (counting 0 as the empty set of vertices).
+        self.num_vertices = [0] + list(range(k, n + 1))
+        self.num_ranks = len(self.num_vertices)
 
-    def size(rank):
-        """Size of each rank (in this case, number of vertices)."""
-        return self.num_vertices[rank]
-
-    def num_sets(rank):
+    def num_sets(self, rank):
         """Number of sets with rank `rank` (unique up to symmetry)."""
-        return special.comb(self.num_vertices[rank], k, exact=True)
-
-    def num_symmetries(rank):
-        """Number of symmetries for rank `rank`."""
-        return special.comb(self.n, self.num_vertices[rank], exact=True)
+        # The 0-th rank corresponds to the empty set of vertices.
+        if rank == 0:
+            return 0
+        return special.comb(self.num_vertices[rank], self.k, exact=True)
 
 
 class EdgeZeroing:
@@ -153,7 +153,7 @@ class EdgeZeroing:
     input edges, because that vertex can no longer be part of a clique.)
 
     This means that at any point, the set of input edges is a set
-    of fully-connected vertices, plus one vertex which has some
+    of fully-connected vertices, plus one vertex which has _some_
     edges zeroed out.
     """
 
@@ -173,26 +173,9 @@ class EdgeZeroing:
             for e in range(k - 1, n):
                 self.vertex_edge_counts.append((v, e))
 
-    def size(self, rank):
-        """Size of each rank (in this case, number of vertices)."""
-        num_vertices, extra_edges = self.vertex_edge_counts[rank]
-        return int(special.comb(num_vertices, 2, exact=True)) + extra_edges
-
     def num_sets(self, rank):
         """Number of possible k-cliques in a graph with `num_vertices` and `extra_edges` extra edges."""
         num_vertices, extra_edges = self.vertex_edge_counts[rank]
         num_sets_in_complete_graph = special.comb(num_vertices, self.k, exact=True)
         num_additional_sets = special.comb(num_vertices - k + 1, self.k - 1, exact=True)
         return num_sets_in_complete_graph + num_additional_sets
-
-    def num_symmetries(self, rank):
-        """Number of ways to choose the edges incident to the extra vertex."""
-        num_vertices, extra_edges = self.vertex_edge_counts[rank]
-        # first, we choose num_vertices vertices
-        num_clique_choices = int(special.comb(self.n, num_vertices, exact=True))
-        # next, we choose an additional vertex
-        num_additional_vertex_choices = self.n - num_vertices
-        # lastly, we pick some subset of the edges
-        num_edge_choices = int(special.comb(vertices, extra_edges, exact=True))
-        # the number of possible choices is the product of all of these
-        return num_clique_choices * num_additional_vertex_choices * num_edge_choices
