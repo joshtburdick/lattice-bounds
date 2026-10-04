@@ -53,7 +53,7 @@ class ZeroingCounts:
             dtype=object,
         )
         num_sets_exact = np.diff(num_sets_cumulative, prepend=0)
-        assert sum(num_sets_exact) == 2 ** self.max_cliques
+        assert sum(num_sets_exact) == 2**self.max_cliques
         return num_sets_exact
 
     def num_sets_by_size(self):
@@ -80,6 +80,9 @@ class ZeroingCounts:
         Returns: a 2-D numpy array of shape (num_ranks, max_cliques + 1),
         where the (i, j)-th entry is the number of sets with exact rank i
         and size j.
+
+        ??? Possibly this should be a list of Numpy arrays, not a 2-D numpy
+        array. (As the lower ranks of this will mostly be 0.)
         """
         num_sets_by_size_cumulative = self.num_sets_by_size()
         num_sets_by_size_exact_rank = np.diff(
@@ -186,7 +189,5 @@ class EdgeZeroing:
         if extra_edges == 0:
             num_additional_sets = 0
         else:
-            num_additional_sets = special.comb(
-                extra_edges, self.k - 1, exact=True
-            )
+            num_additional_sets = special.comb(extra_edges, self.k - 1, exact=True)
         return num_sets_in_complete_graph + num_additional_sets
