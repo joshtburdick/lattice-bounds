@@ -35,51 +35,51 @@ class ZeroingCounts:
         else:
             raise ValueError("Invalid zeroing type.")
 
+    @property
+    def max_cliques(self):
+        """Maximum number of cliques across all ranks."""
+        return special.comb(self.n, self.k, exact=True)
+
     def num_sets_exact_rank(self):
         """Gets the number of sets of cliques with exact rank `rank`.
         Returns: a 1-D numpy array where the i-th entry is the number
         of sets of cliques with exact rank `i`.
         """
-        # first, compute number of sets of cliques, including symmetries
-        num_sets = np.array(
+        num_sets_cumulative = np.array(
             [
-                self.zeroing_strategy.num_sets(rank)
-                * self.zeroing_strategy.num_symmetries(rank)
+                2 ** self.zeroing_strategy.num_sets(rank)
                 for rank in range(self.zeroing_strategy.num_ranks)
-            ]
+            ],
+            dtype=object,
         )
-        num_sets_exact = np.diff(num_sets, prepend=0)
-        assert sum(num_sets_exact) == 2 ** special.comb(self.n, self.k, exact=True)
+        num_sets_exact = np.diff(num_sets_cumulative, prepend=0)
+        assert sum(num_sets_exact) == 2 ** self.max_cliques
         return num_sets_exact
 
     def num_sets_by_size(self):
         """Gets the number of sets of cliques by size, for each rank.
 
-        Returns: a list of numpy arrays, where the i-th array has length
-        equal to the number of possible sizes for rank i, and the j-th entry
-        is the number of sets with rank _up to_ i and size j.
+        Returns: a 2-D numpy array of shape (num_ranks, max_cliques + 1),
+        where the (i, j)-th entry is the number of sets with rank _up to_ i
+        and size j.
         """
-        all_num_sets_by_size = []
-        for rank in range(self.zeroing_strategy.num_ranks):
-            num_sets = self.zeroing_strategy.num_sets(rank)
-            num_sets_by_size = np.array(
-                [
-                    special.comb(self.zeroing_strategy.num_sets(rank), s, exact=True)
-                    for s in range(self.zeroing_strategy.num_sets(rank) + 1)
-                ]
-            )
-            # There's only one empty set of cliques, so we manually set the
-            # number of sets with size 0 to 1.
-            num_sets_by_size[0] = 1
-            all_num_sets_by_size.append(num_sets_by_size)
-        return all_num_sets_by_size
+        max_cliques = self.max_cliques
+        num_ranks = self.zeroing_strategy.num_ranks
+        num_sets_by_size = np.zeros((num_ranks, max_cliques + 1), dtype=object)
+        for rank in range(num_ranks):
+            num_cliques = self.zeroing_strategy.num_sets(rank)
+            for size in range(num_cliques + 1):
+                num_sets_by_size[rank, size] = special.comb(
+                    num_cliques, size, exact=True
+                )
+        return num_sets_by_size
 
     def num_sets_by_size_exact_rank(self):
         """Like num_sets_by_size(), but only counts sets with exactly some rank.
 
-        Returns: a list of numpy arrays, where the i-th array has length
-        equal to the number of possible sizes for rank i, and the j-th entry
-        is the number of sets with rank i and size j.
+        Returns: a 2-D numpy array of shape (num_ranks, max_cliques + 1),
+        where the (i, j)-th entry is the number of sets with exact rank i
+        and size j.
         """
         num_sets_by_size_cumulative = self.num_sets_by_size()
         num_sets_by_size_exact_rank = np.diff(
@@ -100,9 +100,9 @@ class ZeroingCounts:
             exact rank i, in layer j.
         """
         num_sets_by_size_exact_rank = self.num_sets_by_size_exact_rank()
-        num_layers = len(layer_bounds)
+        num_layers = len(layer_bounds) - 1
         layer_counts = np.zeros(
-            (self.zeroing_strategy.num_ranks, num_layers), dtype=np.object
+            (self.zeroing_strategy.num_ranks, num_layers), dtype=object
         )
         for rank in range(self.zeroing_strategy.num_ranks):
             layer_counts[rank] = np.array(
@@ -113,7 +113,8 @@ class ZeroingCounts:
                         ]
                     )
                     for j in range(num_layers)
-                ]
+                ],
+                dtype=object,
             )
         assert np.all(np.sum(layer_counts, axis=1) == self.num_sets_exact_rank())
         return layer_counts
@@ -164,18 +165,28 @@ class EdgeZeroing:
 
         # Stores the counts for a given number of vertices and extra edges.
         self.vertex_edge_counts = [(0, 0)]
-        for num_vertices in range(k, n + 1):
-            # We may just have a complete graph of v vertices.
+        for num_vertices in range(k, n):
+            # We may just have a complete graph of num_vertices vertices.
             self.vertex_edge_counts.append((num_vertices, 0))
             # Or we may have that, plus one vertex connected to some
-            # of the `v` vertices. There need to be at least enough
+            # of the `num_vertices` vertices. There need to be at least enough
             # edges for there to be at least one k-clique, though.
-            for e in range(k - 1, n):
-                self.vertex_edge_counts.append((v, e))
+            for num_edges in range(k - 1, num_vertices):
+                self.vertex_edge_counts.append((num_vertices, num_edges))
+        # Finally, the complete graph of n vertices.
+        self.vertex_edge_counts.append((n, 0))
+        self.num_ranks = len(self.vertex_edge_counts)
 
     def num_sets(self, rank):
-        """Number of possible k-cliques in a graph with `num_vertices` and `extra_edges` extra edges."""
+        """Number of possible k-cliques in a graph of some rank."""
+        if rank == 0:
+            return 0
         num_vertices, extra_edges = self.vertex_edge_counts[rank]
         num_sets_in_complete_graph = special.comb(num_vertices, self.k, exact=True)
-        num_additional_sets = special.comb(num_vertices - k + 1, self.k - 1, exact=True)
+        if extra_edges == 0:
+            num_additional_sets = 0
+        else:
+            num_additional_sets = special.comb(
+                extra_edges, self.k - 1, exact=True
+            )
         return num_sets_in_complete_graph + num_additional_sets
