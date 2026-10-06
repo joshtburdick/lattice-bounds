@@ -1,0 +1,51 @@
+"""Slower way of counting clique sets.
+
+This is slower, but hopefully is simpler. It's intended as a check
+for the faster EdgeZeroing class.
+"""
+
+import itertools
+
+
+class SlowEdgeZeroing:
+    """Counts clique sets by iterating through all possible zeroing orders."""
+
+    def __init__(self, n, k):
+        self.n = n
+        self.k = k
+
+        self.all_edges = list(itertools.combinations(range(n), 2))
+        self.num_edges = len(self.all_edges)
+
+        self.all_cliques = list(itertools.combinations(range(n), k))
+        self.num_cliques = len(self.all_cliques)
+
+    def get_edge_sets_by_rank(self):
+        """Computes sets of edges for each 'rank'.
+
+        This uses the same set of edges at each rank.
+        Starting from the empty set, we add edges with the goal of increasing
+        the number of possible k-cliques as gradually as possible.
+
+        Note that each edge is stored as a sorted tuple (a,b), with a < b.
+        """
+        edge_sets_by_rank = [set()]
+        for num_vertices in range(self.k, self.n + 1):
+            # Find the edges in the new clique.
+            edges_in_new_clique = frozenset(
+                list(itertools.combinations(range(num_vertices), 2))
+            )
+            # First, add just the clique.
+            edge_sets_by_rank.append(edges_in_new_clique)
+            # If we've used all the vertices, we're done.
+            if num_vertices == self.n:
+                break
+            # If not: add a new vertex, connected to the first k-1 vertices (enough for it
+            # to be part of a new clique); then keep adding edges incident to this vertex
+            # (in order) until it's connected to all num_vertices vertices.
+            for num_extra_edges in range(self.k - 1, num_vertices):
+                new_edges = frozenset(
+                    [(i, num_vertices) for i in range(num_extra_edges)]
+                )
+                edge_sets_by_rank.append(edges_in_new_clique | new_edges)
+        return edge_sets_by_rank
