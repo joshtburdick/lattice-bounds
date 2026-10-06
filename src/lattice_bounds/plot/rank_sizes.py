@@ -8,7 +8,6 @@ plots the number of functions having each clique count, broken down by rank.
 """
 
 import argparse
-import sys
 from typing import Optional
 
 import matplotlib.pyplot as plt
@@ -50,7 +49,7 @@ def plot_rank_sizes(
         The matplotlib Axes object containing the plot.
     """
     if ax is None:
-        fig, ax = plt.subplots(figsize=(9, 6), dpi=150)
+        _, ax = plt.subplots(figsize=(9, 6), dpi=150)
 
     num_ranks = zc.zeroing_strategy.num_ranks
     max_cliques = zc.max_cliques
@@ -65,7 +64,10 @@ def plot_rank_sizes(
 
     # Use a visually distinct color palette across ranks
     cmap = plt.get_cmap("tab10" if num_ranks <= 10 else "viridis")
-    colors = [cmap(i / max(1, num_ranks - 1)) if num_ranks > 10 else cmap(i) for i in range(num_ranks)]
+    colors = [
+        cmap(i / max(1, num_ranks - 1)) if num_ranks > 10 else cmap(i)
+        for i in range(num_ranks)
+    ]
 
     for rank in range(num_ranks):
         counts = np.array(counts_matrix[rank], dtype=float)

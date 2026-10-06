@@ -193,8 +193,8 @@ class SlowHypergraphCounter:
             self.count_zero_set(mask)
 
 
-# A quick test
-if __name__ == "__main__":
+def main() -> None:
+    """Run a quick test of HypergraphCounter."""
     hc = HypergraphCounter(int(sys.argv[1]), int(sys.argv[2]))
     # this is a toy example, but is small enough to check by hand
     # hc = HypergraphCounter(6, 3)
@@ -224,3 +224,7 @@ if __name__ == "__main__":
     # check sum of these
     total_hypergraphs = sum(s.sum() for s in exact_number_of_vertices_counts.values())
     print(f"total hypergraphs = {total_hypergraphs}")
+
+
+if __name__ == "__main__":
+    main()
