@@ -49,3 +49,11 @@ class SlowEdgeZeroing:
                 )
                 edge_sets_by_rank.append(edges_in_new_clique | new_edges)
         return edge_sets_by_rank
+
+    def count_clique_sets(self):
+        """Counts sets of cliques by iteratively zeroing out edges.
+
+        Returns:
+            A dictionary mapping the rank to a Numpy array number of clique sets with that rank.
+        """
+        pass
