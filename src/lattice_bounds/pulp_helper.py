@@ -26,7 +26,7 @@ class PulpHelper:
         # the variables are assumed to all be >= 0
         # ??? are there better "box" bounds?
         for v in var_names:
-            self.vars[v] = pulp.LpVariable(self.get_parseable_name(v), 0)
+            self.vars[v] = pulp.LpVariable(self.get_parseable_name(v))
         # the problem
         self.prob = pulp.LpProblem("sidsproblem", pulp.LpMinimize)
 
@@ -129,7 +129,7 @@ class PulpHelper:
         # did problem have a solution?
         if r == 1:
             opt = {x: val.varValue for x, val in self.vars.items()}
-            opt["__objective__"] = pulp.pulp.value(self.prob.objective)
+            opt["__objective__"] = pulp.value(self.prob.objective)
             return opt
         # problem was infeasible, or something else went wrong
         return None
