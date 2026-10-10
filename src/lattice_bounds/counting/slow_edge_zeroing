@@ -8,11 +8,29 @@ import itertools
 
 
 class SlowEdgeZeroing:
-    """Counts clique sets by iterating through all possible zeroing orders."""
+    """Counts clique sets by iterating through all possible zeroing orders.
 
-    def __init__(self, n, k):
+    We represent sets of cliques using integer bitmasks.
+    (Although the focus isn't efficiency, this should suffice for comparing
+    with the faster EdgeZeroing class for small cases like n=8, k=3).
+
+    Args:
+        n: number of vertices
+        k: size of cliques
+        include_symmetries: whether to include symmetries in the counts
+            (default: False).
+
+    Raises:
+        ValueError: if include_symmetries is True, as this is not yet implemented.
+    """
+
+    def __init__(self, n, k, include_symmetries=False):
         self.n = n
         self.k = k
+        self.include_symmetries = include_symmetries
+
+        if self.include_symmetries:
+            raise NotImplementedError("Symmetries are not yet implemented.")
 
         self.all_edges = list(itertools.combinations(range(n), 2))
         self.num_edges = len(self.all_edges)
@@ -56,3 +74,19 @@ class SlowEdgeZeroing:
         Returns:
             A dictionary mapping the rank to a Numpy array number of clique sets with that rank.
         """
+
+    def _restrict_cliques_to_edge_set(self, cliques_mask, edge_set):
+        """Returns the set of cliques that are supported by the given edge set.
+
+        Args:
+            cliques_mask: a set of sets of cliques, represented by a Numpy array
+                of integer bitmasks
+            edge_set: a set of edges
+        Returns:
+            a set of sets of cliques, represented by a Numpy array of integer bitmasks
+        """
+        cliques = 0
+        for i, clique in enumerate(self.all_cliques):
+            if all(edge in edge_set for edge in itertools.combinations(clique, 2)):
+                cliques |= 1 << i
+        return cliques
