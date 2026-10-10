@@ -56,4 +56,3 @@ class SlowEdgeZeroing:
         Returns:
             A dictionary mapping the rank to a Numpy array number of clique sets with that rank.
         """
-        pass

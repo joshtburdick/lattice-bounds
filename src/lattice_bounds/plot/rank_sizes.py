@@ -23,12 +23,14 @@ def get_rank_label(zc: ZeroingCounts, rank: int) -> str:
     if hasattr(strategy, "num_vertices"):
         num_v = strategy.num_vertices[rank]
         return f"Rank {rank} (v={num_v}, {num_cliques} max cliques)"
-    elif hasattr(strategy, "vertex_edge_counts"):
+    if hasattr(strategy, "vertex_edge_counts"):
         v, e = strategy.vertex_edge_counts[rank]
         return f"Rank {rank} (v={v}, extra_e={e}, {num_cliques} max cliques)"
     return f"Rank {rank} ({num_cliques} max cliques)"
 
 
+# FIXME(jtb): possibly refactor this, but it's not obvious how.
+# pylint: disable=too-many-locals
 def plot_rank_sizes(
     zc: ZeroingCounts,
     exact: bool = True,
@@ -143,7 +145,9 @@ def main():
     parser = argparse.ArgumentParser(
         description="Plot function counts by rank and number of cliques."
     )
-    parser.add_argument("-n", type=int, default=6, help="Number of vertices (default: 6)")
+    parser.add_argument(
+        "-n", type=int, default=6, help="Number of vertices (default: 6)"
+    )
     parser.add_argument("-k", type=int, default=3, help="Clique size (default: 3)")
     parser.add_argument(
         "--zeroing-type",

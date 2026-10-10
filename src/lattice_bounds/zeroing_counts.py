@@ -146,6 +146,13 @@ class VertexZeroing:
             return 0
         return special.comb(self.num_vertices[rank], self.k, exact=True)
 
+    def num_symmetries(self, rank):
+        """Number of symmetries for a given rank."""
+        # The 0-th rank corresponds to the empty set of vertices.
+        if rank == 0:
+            return 0
+        return special.comb(self.num_vertices[rank], self.k, exact=True)
+
 
 class EdgeZeroing:
     """Getting counts of possible edge sets, when zeroing edges.
@@ -191,3 +198,15 @@ class EdgeZeroing:
         else:
             num_additional_sets = special.comb(extra_edges, self.k - 1, exact=True)
         return num_sets_in_complete_graph + num_additional_sets
+
+    def num_symmetries(self, rank):
+        """Number of symmetries for a given rank."""
+        if rank == 0:
+            return 0
+        num_vertices, extra_edges = self.vertex_edge_counts[rank]
+        # If there are no extra edges, then this is just choosing a k-clique
+        # from the complete graph of `num_vertices` vertices.
+        if extra_edges == 0:
+            return special.comb(num_vertices, self.k, exact=True)
+        # FIXME this isn't correct
+        return special.comb(extra_edges, self.k - 1, exact=True)
