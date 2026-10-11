@@ -6,6 +6,8 @@ for the faster EdgeZeroing class.
 
 import itertools
 
+import numpy as np
+
 
 class SlowEdgeZeroing:
     """Counts clique sets by iterating through all possible zeroing orders.
@@ -74,19 +76,54 @@ class SlowEdgeZeroing:
         Returns:
             A dictionary mapping the rank to a Numpy array number of clique sets with that rank.
         """
+        all_cliques_mask = 2**self.num_cliques - 1
+        sets = np.full(2**self.num_cliques, 2**self.num_cliques - 1, dtype=np.int64)
+        total_counts = dict()
+        for rank in range(len(self.edge_sets_by_rank) - 1, -1, -1):
+            edge_set = self.edge_sets_by_rank[rank]
+            if self.include_symmetries:
+                edge_sets = self._get_permuted_edge_sets(edge_set)
+            else:
+                edge_sets = [edge_set]
+            in_edge_set = np.full(sets.shape[0], False)
+            for clique_set in sets:
+                in_edge_set = in_edge_set | self._all_in_edge_set(clique_set, edge_set)
+            total_counts[rank] = np.bincount(np.bitwise_count(clique_set))
 
-    def _restrict_cliques_to_edge_set(self, cliques_mask, edge_set):
-        """Returns the set of cliques that are supported by the given edge set.
+        # Compute the number of clique sets with _exactly_ each rank.
+        rank_count = {"0": np.array[1]}
+        for rank in range(1, len(self.edge_sets_by_rank)):
+            rank_count[rank] = total_counts[rank] - total_counts[rank - 1]
+        return rank_count
 
-        Args:
-            cliques_mask: a set of sets of cliques, represented by a Numpy array
-                of integer bitmasks
-            edge_set: a set of edges
-        Returns:
-            a set of sets of cliques, represented by a Numpy array of integer bitmasks
-        """
+    def _get_permuted_edge_sets(self, edge_set):
+        """Returns all unique edge sets that can be obtained by permuting the vertices of `edge_set`."""
+        permuted_edge_sets = set()
+        for perm in itertools.permutations(range(self.n)):
+            permuted_edge_set = frozenset(
+                {tuple(sorted((perm[i], perm[j])) for i, j in edge_set)}
+            )
+            permuted_edge_sets.add(permuted_edge_set)
+        return permuted_edge_sets
+
+    def _get_possible_cliques(self, edge_set):
+        """Gets the bitmask of cliques that are supported by the given edge set."""
         cliques = 0
         for i, clique in enumerate(self.all_cliques):
             if all(edge in edge_set for edge in itertools.combinations(clique, 2)):
                 cliques |= 1 << i
         return cliques
+
+    def _all_in_edge_set(self, cliques_sets, edge_set):
+        """Checks whether all cliques in `cliques_mask` are supported by `edge_set`.
+
+        Args:
+            cliques_sets: a set of sets of cliques, represented by a Numpy array
+                of integer bitmasks
+            edge_set: a set of edges
+        Returns:
+            a boolean vector, where the `i`'th entry is True iff `cliques_mask[i]`
+            is supported by the edge_set
+        """
+        cliques_supported = self.get_possible_cliques(edge_set)
+        return (cliques_sets & cliques_supported) == cliques_sets
