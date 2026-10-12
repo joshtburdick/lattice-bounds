@@ -34,13 +34,12 @@ class SlowEdgeZeroing:
         if self.include_symmetries:
             raise NotImplementedError("Symmetries are not yet implemented.")
 
-        self.all_edges = list(itertools.combinations(range(n), 2))
-        self.num_edges = len(self.all_edges)
-
         self.all_cliques = list(itertools.combinations(range(n), k))
         self.num_cliques = len(self.all_cliques)
 
-    def get_edge_sets_by_rank(self):
+        self.setup_edge_sets_by_rank()
+
+    def setup_edge_sets_by_rank(self):
         """Computes sets of edges for each 'rank'.
 
         This uses the same set of edges at each rank.
@@ -68,7 +67,7 @@ class SlowEdgeZeroing:
                     [(i, num_vertices) for i in range(num_extra_edges)]
                 )
                 edge_sets_by_rank.append(edges_in_new_clique | new_edges)
-        return edge_sets_by_rank
+        self.edge_sets_by_rank = edge_sets_by_rank
 
     def count_clique_sets(self):
         """Counts sets of cliques by iteratively zeroing out edges.
@@ -76,7 +75,6 @@ class SlowEdgeZeroing:
         Returns:
             A dictionary mapping the rank to a Numpy array number of clique sets with that rank.
         """
-        all_cliques_mask = 2**self.num_cliques - 1
         sets = np.full(2**self.num_cliques, 2**self.num_cliques - 1, dtype=np.int64)
         # Total number of cliques of each size, for each rank.
         total_counts = dict()
@@ -86,19 +84,17 @@ class SlowEdgeZeroing:
                 edge_sets = self._get_permuted_edge_sets(edge_set)
             else:
                 edge_sets = [edge_set]
-            in_edge_set = np.full(sets.shape[0], False)
-            for clique_set in sets:
-                in_edge_set = in_edge_set | self._all_in_edge_set(clique_set, edge_set)
-            total_counts[rank] = np.bincount(np.bitwise_count(clique_set))
+            sets = self._filter_by_edge_sets(sets, edge_sets)
+            total_counts[rank] = np.bincount(np.bitwise_count(sets))
 
         # Compute the number of clique sets with _exactly_ each rank.
-        rank_count = {"0": np.array[1]}
+        rank_count = {0: np.array([1])}
         for rank in range(1, len(self.edge_sets_by_rank)):
             rank_count[rank] = total_counts[rank] - total_counts[rank - 1]
         return rank_count
 
     def _get_permuted_edge_sets(self, edge_set):
-        """Returns all unique edge sets that can be obtained by permuting the vertices of `edge_set`."""
+        """Returns unique edge sets from permuting vertices of `edge_set`."""
         permuted_edge_sets = set()
         for perm in itertools.permutations(range(self.n)):
             permuted_edge_set = frozenset(
@@ -107,7 +103,7 @@ class SlowEdgeZeroing:
             permuted_edge_sets.add(permuted_edge_set)
         return permuted_edge_sets
 
-    def _get_possible_cliques(self, edge_set):
+    def _get_possible_cliques_mask(self, edge_set):
         """Gets the bitmask of cliques that are supported by the given edge set."""
         cliques = 0
         for i, clique in enumerate(self.all_cliques):
@@ -115,16 +111,18 @@ class SlowEdgeZeroing:
                 cliques |= 1 << i
         return cliques
 
-    def _all_in_edge_set(self, cliques_sets, edge_set):
-        """Checks whether all cliques in `cliques_mask` are supported by `edge_set`.
+    def _filter_by_edge_sets(self, clique_sets, edge_sets):
+        """Filters a set of clique sets by a set of edge sets.
 
         Args:
-            cliques_sets: a set of sets of cliques, represented by a Numpy array
+            clique_sets: a set of sets of cliques, represented by a Numpy array
                 of integer bitmasks
-            edge_set: a set of edges
+            edge_sets: a set of edge sets
         Returns:
-            a boolean vector, where the `i`'th entry is True iff `cliques_mask[i]`
-            is supported by the edge_set
+            A Numpy array of integer bitmasks, representing the set of clique sets
         """
-        cliques_supported = self.get_possible_cliques(edge_set)
-        return (cliques_sets & cliques_supported) == cliques_sets
+        in_some_edge_set = np.full(clique_sets.shape[0], False)
+        for edge_set in edge_sets:
+            clique_filter = self._get_possible_cliques_mask(edge_set)
+            in_some_edge_set = in_some_edge_set | ((clique_sets & clique_filter) != 0)
+        return clique_sets[in_some_edge_set]
