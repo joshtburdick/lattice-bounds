@@ -208,5 +208,5 @@ class EdgeZeroing:
         # from the complete graph of `num_vertices` vertices.
         if extra_edges == 0:
             return special.comb(num_vertices, self.k, exact=True)
-        # FIXME this isn't correct
+        # ??? check this?
         return special.comb(extra_edges, self.k - 1, exact=True)

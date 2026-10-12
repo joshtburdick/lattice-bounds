@@ -78,6 +78,7 @@ class SlowEdgeZeroing:
         """
         all_cliques_mask = 2**self.num_cliques - 1
         sets = np.full(2**self.num_cliques, 2**self.num_cliques - 1, dtype=np.int64)
+        # Total number of cliques of each size, for each rank.
         total_counts = dict()
         for rank in range(len(self.edge_sets_by_rank) - 1, -1, -1):
             edge_set = self.edge_sets_by_rank[rank]

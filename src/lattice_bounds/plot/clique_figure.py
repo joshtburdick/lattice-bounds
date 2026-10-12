@@ -3,9 +3,6 @@
 Plots graphs, after zeroing out some hypercliques.
 """
 
-# FIXME
-# - clarify where arrows are pointing
-
 import colorsys
 import itertools
 import random
@@ -136,7 +133,6 @@ def zero_vertex(v, s):
 
 def all_vertices(x):
     """Gets all the vertices in a set of edges."""
-    # FIXME replace this with something simpler?
     r = []
     for e in x:
         for v in e:
@@ -170,9 +166,6 @@ def num_vertices_zeroed(a, b):
     return None
 
 
-
-
-
 def plot_bounce():
     """Plots one 'bounce', down and up."""
     # hopefully this will make the figure reproducible
@@ -187,8 +180,6 @@ def plot_bounce():
     # construct the sets: first the set after "zeroing"...
     b_t = frozenset(random.sample(sorted(missed_sets), 3))
     # ... then the "before" and "after" sets
-    # XXX these are actually now the "extra" cliques, which are
-    # zeroed out or added, respectively
     a_t = frozenset(random.sample(sorted(hit_sets), 3))
     a_t_plus_1 = frozenset(random.sample(sorted(hit_sets), 2))
 
@@ -199,7 +190,6 @@ def plot_bounce():
     # plt.ylim(-0.3,1.3)
 
     # utility to set all cliques to one color
-    # FIXME maybe simpler if each clique had its own alpha?
     def all_colors(c):
         return {s: c for s in CLIQUES}
 
@@ -258,9 +248,11 @@ def plot_zeroing_one_vertex():
     """Plots the effect of zeroing out one vertex.
 
     That is plots G and Z(G)."""
-    g = random.sample(CLIQUES, 8)
+    g = list(CLIQUES)
+    random.shuffle(g)
+    g = g[:8]
     zeroed_vertex = 2
-    zeroed_g = [c for c in g if zeroed_vertex not in c]  # pylint: disable=unsupported-membership-test
+    zeroed_g = [c for c in g if zeroed_vertex not in c]
 
     # set up figure
     plt.figure(figsize=(4, 4))
@@ -426,7 +418,6 @@ class ZeroingPlot:
         )
         cf = CliqueFigure(axs, N, colors, 0)
         # plot the sets of cliques
-        # XXX this sometimes almost has collisions, but it seems worth it
         radius = 0.45
         # pdb.set_trace()
         for s in self.set_list:
