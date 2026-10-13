@@ -5,6 +5,7 @@ for the faster EdgeZeroing class.
 """
 
 import itertools
+import pdb
 
 import numpy as np
 
@@ -75,7 +76,7 @@ class SlowEdgeZeroing:
         Returns:
             A dictionary mapping the rank to a Numpy array number of clique sets with that rank.
         """
-        sets = np.full(2**self.num_cliques, 2**self.num_cliques - 1, dtype=np.int64)
+        sets = np.arange(2**self.num_cliques)
         # Total number of cliques of each size, for each rank.
         total_counts = dict()
         for rank in range(len(self.edge_sets_by_rank) - 1, -1, -1):
@@ -124,5 +125,7 @@ class SlowEdgeZeroing:
         in_some_edge_set = np.full(clique_sets.shape[0], False)
         for edge_set in edge_sets:
             clique_filter = self._get_possible_cliques_mask(edge_set)
-            in_some_edge_set = in_some_edge_set | ((clique_sets & clique_filter) != 0)
+            in_some_edge_set = in_some_edge_set | (
+                (clique_sets & clique_filter) == clique_sets
+            )
         return clique_sets[in_some_edge_set]

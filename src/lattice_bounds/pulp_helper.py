@@ -73,7 +73,6 @@ class PulpHelper:
         """solves the linear system, for one variable.
 
         this assumes all variables are >= 0.
-        fixme add option to make all variables integers?
         """
         self.prob += self.vars[var_to_minimize]
         # for debugging
