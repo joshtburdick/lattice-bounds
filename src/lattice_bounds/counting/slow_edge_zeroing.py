@@ -2,6 +2,9 @@
 
 This is slower, but hopefully is simpler. It's intended as a check
 for the faster EdgeZeroing class.
+
+Note: _extremely_ slow for, say, n=7, k=3, even without symmetries.
+(This probably isn't a problem, though.)
 """
 
 import itertools
@@ -31,9 +34,6 @@ class SlowEdgeZeroing:
         self.n = n
         self.k = k
         self.include_symmetries = include_symmetries
-
-        if self.include_symmetries:
-            raise NotImplementedError("Symmetries are not yet implemented.")
 
         self.all_cliques = list(itertools.combinations(range(n), k))
         self.num_cliques = len(self.all_cliques)
@@ -65,7 +65,7 @@ class SlowEdgeZeroing:
             # (in order) until it's connected to all num_vertices vertices.
             for num_extra_edges in range(self.k - 1, num_vertices):
                 new_edges = frozenset(
-                    [(i, num_vertices) for i in range(num_extra_edges)]
+                    [tuple((i, num_vertices)) for i in range(num_extra_edges)]
                 )
                 edge_sets_by_rank.append(edges_in_new_clique | new_edges)
         self.edge_sets_by_rank = edge_sets_by_rank
@@ -91,7 +91,13 @@ class SlowEdgeZeroing:
         # Compute the number of clique sets with _exactly_ each rank.
         rank_count = {0: np.array([1])}
         for rank in range(1, len(self.edge_sets_by_rank)):
-            rank_count[rank] = total_counts[rank] - total_counts[rank - 1]
+            rank_count[rank] = total_counts[rank] - np.pad(
+                total_counts[rank - 1],
+                (
+                    0,
+                    len(total_counts[rank]) - len(total_counts[rank - 1]),
+                ),
+            )
         return rank_count
 
     def _get_permuted_edge_sets(self, edge_set):
@@ -99,7 +105,7 @@ class SlowEdgeZeroing:
         permuted_edge_sets = set()
         for perm in itertools.permutations(range(self.n)):
             permuted_edge_set = frozenset(
-                {tuple(sorted((perm[i], perm[j])) for i, j in edge_set)}
+                tuple(sorted((perm[i], perm[j]))) for i, j in edge_set
             )
             permuted_edge_sets.add(permuted_edge_set)
         return permuted_edge_sets
