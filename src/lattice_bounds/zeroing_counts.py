@@ -22,12 +22,14 @@ class ZeroingCounts:
     this setup.
     """
 
-    def __init__(self, n, k, zeroing_type="vertex"):
+    def __init__(self, n, k, zeroing_type="vertex", include_symmetries=False):
         """Constructor."""
         self.n = n
         self.k = k
         self.zeroing_type = zeroing_type
-
+        self.include_symmetries = include_symmetries
+        if include_symmetries:
+            raise NotImplementedError("Symmetries are not yet implemented.")
         if self.zeroing_type == "vertex":
             self.zeroing_strategy = VertexZeroing(n, k)
         elif self.zeroing_type == "edge":
@@ -47,7 +49,7 @@ class ZeroingCounts:
         """
         num_sets_cumulative = np.array(
             [
-                2 ** self.zeroing_strategy.num_sets(rank)
+                2 ** self.zeroing_strategy.num_possible_cliques(rank)
                 for rank in range(self.zeroing_strategy.num_ranks)
             ],
             dtype=object,
@@ -67,7 +69,7 @@ class ZeroingCounts:
         num_ranks = self.zeroing_strategy.num_ranks
         num_sets_by_size = np.zeros((num_ranks, max_cliques + 1), dtype=object)
         for rank in range(num_ranks):
-            num_cliques = self.zeroing_strategy.num_sets(rank)
+            num_cliques = self.zeroing_strategy.num_possible_cliques(rank)
             for size in range(num_cliques + 1):
                 num_sets_by_size[rank, size] = special.comb(
                     num_cliques, size, exact=True
@@ -77,12 +79,11 @@ class ZeroingCounts:
     def num_sets_by_size_exact_rank(self):
         """Like num_sets_by_size(), but only counts sets with exactly some rank.
 
-        Returns: a 2-D numpy array of shape (num_ranks, max_cliques + 1),
-        where the (i, j)-th entry is the number of sets with exact rank i
-        and size j.
+        Returns: a list of 1-D numpy arrays, where the i-th entry is a
+            numpy array, whose j-th entry is the number of sets with
+            exact rank i and size j.
 
-        ??? Possibly this should be a list of Numpy arrays, not a 2-D numpy
-        array. (As the lower ranks of this will mostly be 0.)
+            (Later entries in the list will be much longer than earlier entries.)
         """
         num_sets_by_size_cumulative = self.num_sets_by_size()
         num_sets_by_size_exact_rank = np.diff(
@@ -139,8 +140,8 @@ class VertexZeroing:
         self.num_vertices = [0] + list(range(k, n + 1))
         self.num_ranks = len(self.num_vertices)
 
-    def num_sets(self, rank):
-        """Number of sets with rank `rank` (unique up to symmetry)."""
+    def num_possible_cliques(self, rank):
+        """Number of possible cliques with rank `rank` (unique up to symmetry)."""
         # The 0-th rank corresponds to the empty set of vertices.
         if rank == 0:
             return 0
@@ -150,8 +151,10 @@ class VertexZeroing:
         """Number of symmetries for a given rank."""
         # The 0-th rank corresponds to the empty set of vertices.
         if rank == 0:
-            return 0
-        return special.comb(self.num_vertices[rank], self.k, exact=True)
+            return 1
+        # Otherwise, this is the number of ways to choose the
+        # number of vertices at this rank, from the larger set.
+        return special.comb(self.n, self.num_vertices[rank], exact=True)
 
 
 class EdgeZeroing:
@@ -187,7 +190,7 @@ class EdgeZeroing:
         self.vertex_edge_counts.append((n, 0))
         self.num_ranks = len(self.vertex_edge_counts)
 
-    def num_sets(self, rank):
+    def num_possible_cliques(self, rank):
         """Number of possible k-cliques in a graph of some rank."""
         if rank == 0:
             return 0
@@ -204,9 +207,19 @@ class EdgeZeroing:
         if rank == 0:
             return 0
         num_vertices, extra_edges = self.vertex_edge_counts[rank]
-        # If there are no extra edges, then this is just choosing a k-clique
-        # from the complete graph of `num_vertices` vertices.
+        # First, choose the vertices for the clique.
+        num_ways_to_choose_clique = special.comb(self.n, num_vertices, exact=True)
+        # If there are no extra edges, then we're done.
         if extra_edges == 0:
-            return special.comb(num_vertices, self.k, exact=True)
-        # ??? check this?
-        return special.comb(extra_edges, self.k - 1, exact=True)
+            return num_ways_to_choose_clique
+        # Otherwise, we also need to choose the `extra_edges` from the remaining
+        # `num_vertices` vertices: first picking an additional vertex, then
+        # choosing `extra_edges` edges to connect it to.
+        num_ways_to_choose_other_edges = (self.n - num_vertices) * special.comb(
+            num_vertices - 1, extra_edges, exact=True
+        )
+        # Special case: if (and only if) extra_edges == num_vertices - 1,
+        # we have overcounted by a factor of 2.
+        if extra_edges == num_vertices - 1:
+            return num_ways_to_choose_clique * num_ways_to_choose_other_edges // 2
+        return num_ways_to_choose_clique * num_ways_to_choose_other_edges

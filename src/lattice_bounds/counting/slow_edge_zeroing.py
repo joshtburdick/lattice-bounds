@@ -8,7 +8,6 @@ Note: _extremely_ slow for, say, n=7, k=3, even without symmetries.
 """
 
 import itertools
-import pdb
 
 import numpy as np
 
@@ -78,7 +77,7 @@ class SlowEdgeZeroing:
         """
         sets = np.arange(2**self.num_cliques)
         # Total number of cliques of each size, for each rank.
-        total_counts = dict()
+        total_counts = {}
         for rank in range(len(self.edge_sets_by_rank) - 1, -1, -1):
             edge_set = self.edge_sets_by_rank[rank]
             if self.include_symmetries:
