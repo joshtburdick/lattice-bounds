@@ -19,7 +19,7 @@ from lattice_bounds.zeroing_counts import ZeroingCounts
 def get_rank_label(zc: ZeroingCounts, rank: int) -> str:
     """Returns a descriptive label for a given rank."""
     strategy = zc.zeroing_strategy
-    num_cliques = strategy.num_sets(rank)
+    num_cliques = strategy.num_possible_cliques(rank)
     if hasattr(strategy, "num_vertices"):
         num_v = strategy.num_vertices[rank]
         return f"Rank {rank} (v={num_v}, {num_cliques} max cliques)"
