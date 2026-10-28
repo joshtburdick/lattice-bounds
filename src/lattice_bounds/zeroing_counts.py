@@ -156,6 +156,13 @@ class VertexZeroing:
         # number of vertices at this rank, from the larger set.
         return special.comb(self.n, self.num_vertices[rank], exact=True)
 
+    def num_occurrences(self, rank_1, rank_2):
+        """Number of times a set of rank rank_1 occurs in a set of rank rank_2."""
+        # Possibly this should be an error.
+        if rank_1 > rank_2:
+            return 0
+        pass
+
 
 class EdgeZeroing:
     """Getting counts of possible edge sets, when zeroing edges.
