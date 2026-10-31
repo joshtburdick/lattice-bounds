@@ -268,7 +268,7 @@ class EdgeZeroing:
 
         # Case in which A's "main clique" uses B's "new vertex".
         if v_a <= e_b + 1:
-            pass  # FIXME
+            pass
 
         # Case in which A and B share the same "new vertex".
         if e_a > 0 and e_b > 0:
@@ -278,8 +278,12 @@ class EdgeZeroing:
         else:
             num_a_and_b_share_new_vertex = 0
 
-        return num_a_contained_in_b_main_clique + num_a_and_b_share_new_vertex
+        total_occurrences = (
+            num_a_contained_in_b_main_clique + num_a_and_b_share_new_vertex
+        )
 
-        # FIXME do we need to deal with case in which the "new vertex" degree is
-        # the same as one of the "main clique"'s vertices? (It seems like that
-        # would add some extra symmetries.)
+        # If "new vertex" degree is the same as one of the "main clique"'s
+        # vertices, we over-counted by a factor of two.
+        if v_a == e_b + 1:
+            total_occurrences //= 2
+        return total_occurrences
