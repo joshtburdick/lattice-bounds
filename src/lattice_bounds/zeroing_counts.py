@@ -156,12 +156,19 @@ class VertexZeroing:
         # number of vertices at this rank, from the larger set.
         return special.comb(self.n, self.num_vertices[rank], exact=True)
 
-    def num_occurrences(self, rank_1, rank_2):
-        """Number of times a set of rank rank_1 occurs in a set of rank rank_2."""
-        # Possibly this should be an error.
-        if rank_1 > rank_2:
+    def num_occurrences(self, a_rank, b_rank):
+        """Number of times an set `A` occurs in an edge set `B`.
+
+        a_rank, b_rank: the ranks of the sets.
+        Returns: the number of sets of rank A in a set of rank B.
+        """
+        # If A is larger, it doesn't occur in B at all.
+        # (Possibly this should be an error?)
+        if a_rank > b_rank:
             return 0
-        pass
+        v1 = self.num_vertices[a_rank]
+        v2 = self.num_vertices[b_rank]
+        return special.comb(v2, v1, exact=True)
 
 
 class EdgeZeroing:
@@ -230,3 +237,49 @@ class EdgeZeroing:
         if extra_edges == num_vertices - 1:
             return num_ways_to_choose_clique * num_ways_to_choose_other_edges // 2
         return num_ways_to_choose_clique * num_ways_to_choose_other_edges
+
+    def num_occurrences(self, a_rank, b_rank):
+        """Number of times set A of rank `a_rank` occurs in a set B of rank `b_rank`.
+
+        Both A and B are edge sets, consisting of a clique (which we refer to as
+        the "main clique") plus some extra edges incident to a single other vertex
+        (which we refer to as the "new vertex").
+
+        a_rank, b_rank: the ranks of the sets.
+
+        Returns: the number of times a set of rank `a_rank` occurs in a set of rank `b_rank`.
+        """
+        # If A is “bigger” than B, it can’t be a subset of B.
+        # (Possibly this should be an error?)
+        if a_rank > b_rank:
+            return 0
+        v_a, e_a = self.vertex_edge_counts[a_rank]
+        v_b, e_b = self.vertex_edge_counts[b_rank]
+
+        # Case in which A only uses vertices from B's "main clique"
+        # (but not B's "new vertex").
+        # Start with the number of ways of picking A's "main clique".
+        num_a_contained_in_b_main_clique = special.comb(v_b, v_a, exact=True)
+        # If A has a "new vertex", we also need to choose the edges incident to it.
+        if e_a > 0:
+            num_a_contained_in_b_main_clique *= (v_b - v_a) * special.comb(
+                e_b - 1, e_a - 1, exact=True
+            )
+
+        # Case in which A's "main clique" uses B's "new vertex".
+        if v_a <= e_b + 1:
+            pass  # FIXME
+
+        # Case in which A and B share the same "new vertex".
+        if e_a > 0 and e_b > 0:
+            num_a_and_b_share_new_vertex = special.comb(
+                v_b - 1, v_a - 1, exact=True
+            ) * special.comb(e_b - 1, e_a - 1, exact=True)
+        else:
+            num_a_and_b_share_new_vertex = 0
+
+        return num_a_contained_in_b_main_clique + num_a_and_b_share_new_vertex
+
+        # FIXME do we need to deal with case in which the "new vertex" degree is
+        # the same as one of the "main clique"'s vertices? (It seems like that
+        # would add some extra symmetries.)
